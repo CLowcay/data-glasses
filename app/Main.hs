@@ -1,6 +1,28 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Main where
 
-import Lib
+import DG.Interpreter (evaluate)
+import DG.Parser (expression)
+import qualified DG.Syntax as S
+import qualified Data.Aeson as J
+import qualified Data.Aeson.Parser as J
+import qualified Data.ByteString.Lazy as LB
+import Data.Foldable (for_)
+import qualified Data.HashMap.Strict as HM
+import qualified Data.Text as T
+import System.Environment (getArgs)
+import Text.Megaparsec (errorBundlePretty, parseErrorPretty, runParser)
 
 main :: IO ()
-main = someFunc
+main = do
+  [rawProgram] <- getArgs
+  case runParser expression "expression" (T.pack rawProgram) of
+    Left errorBundle -> putStrLn (errorBundlePretty errorBundle)
+    Right program -> do
+      stdin <- LB.getContents
+      case J.eitherDecode stdin of
+        Left err -> putStrLn err
+        Right v -> case evaluate (HM.fromList [(S.Identifier "x", v)]) program of
+          Left err -> putStrLn err
+          Right values -> for_ values print

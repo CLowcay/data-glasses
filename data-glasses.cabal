@@ -25,7 +25,9 @@ source-repository head
 
 library
   exposed-modules:
-      Lib
+      DG.Interpreter
+      DG.Parser
+      DG.Syntax
   other-modules:
       Paths_data_glasses
   hs-source-dirs:
@@ -33,11 +35,15 @@ library
   build-depends:
       aeson
     , base >=4.7 && <5
+    , bytestring
     , containers
+    , hashable
     , megaparsec
+    , text
+    , unordered-containers
   default-language: Haskell2010
 
-executable data-glasses-exe
+executable dagl
   main-is: Main.hs
   other-modules:
       Paths_data_glasses
@@ -47,9 +53,13 @@ executable data-glasses-exe
   build-depends:
       aeson
     , base >=4.7 && <5
+    , bytestring
     , containers
     , data-glasses
+    , hashable
     , megaparsec
+    , text
+    , unordered-containers
   default-language: Haskell2010
 
 test-suite data-glasses-test
@@ -63,7 +73,11 @@ test-suite data-glasses-test
   build-depends:
       aeson
     , base >=4.7 && <5
+    , bytestring
     , containers
     , data-glasses
+    , hashable
     , megaparsec
+    , text
+    , unordered-containers
   default-language: Haskell2010

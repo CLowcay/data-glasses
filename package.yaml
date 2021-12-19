@@ -22,14 +22,18 @@ description: Please see the README on GitHub at <https://github.com/CLowcay/data
 dependencies:
   - aeson
   - base >= 4.7 && < 5
+  - bytestring
   - containers
+  - hashable
   - megaparsec
+  - text
+  - unordered-containers
 
 library:
   source-dirs: src
 
 executables:
-  data-glasses-exe:
+  dagl:
     main: Main.hs
     source-dirs: app
     ghc-options:
