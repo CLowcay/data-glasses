@@ -26,6 +26,7 @@ dependencies:
   - containers
   - hashable
   - megaparsec
+  - scientific
   - text
   - unordered-containers
 
@@ -53,3 +54,4 @@ tests:
       - -with-rtsopts=-N
     dependencies:
       - data-glasses
+      - hspec

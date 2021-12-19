@@ -7,10 +7,12 @@ import DG.Parser (expression)
 import qualified DG.Syntax as S
 import qualified Data.Aeson as J
 import qualified Data.Aeson.Parser as J
+import qualified Data.Aeson.Text as J
 import qualified Data.ByteString.Lazy as LB
 import Data.Foldable (for_)
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Text as T
+import qualified Data.Text.Lazy.IO as LT
 import System.Environment (getArgs)
 import Text.Megaparsec (errorBundlePretty, parseErrorPretty, runParser)
 
@@ -25,4 +27,4 @@ main = do
         Left err -> putStrLn err
         Right v -> case evaluate (HM.fromList [(S.Identifier "x", v)]) program of
           Left err -> putStrLn err
-          Right values -> for_ values print
+          Right values -> for_ values (LT.putStrLn . J.encodeToLazyText)

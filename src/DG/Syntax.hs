@@ -17,6 +17,16 @@ data Expr
   | Selection Expr Selector Operation
   deriving (Eq, Show)
 
-data Selector = Field Identifier deriving (Eq, Show)
+data Selector
+  = Field Identifier
+  | Compose Selector Selector
+  deriving (Eq, Show)
 
-data Operation = Get | Set Expr deriving (Eq, Show)
+data Operation
+  = Get
+  | Set Expr
+  | PlusEq Expr
+  | MinusEq Expr
+  | TimesEq Expr
+  | DivEq Expr
+  deriving (Eq, Show)

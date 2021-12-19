@@ -39,10 +39,28 @@ expression = do
 
   selection <-
     optional . try $
-      "." *> do
-        S.Selection value <$> selector <*> pure S.Get
+      lexeme dot *> do
+        S.Selection value <$> selector
+          <*> (fromMaybe S.Get <$> optional (try operation))
 
   pure (fromMaybe value selection)
 
+dot :: Parser ()
+dot = () <$ lexeme "."
+
 selector :: Parser S.Selector
-selector = S.Field <$> identifier
+selector = do
+  s1 <- singleSelector
+  fromMaybe s1 <$> (optional . try) (dot *> (S.Compose s1 <$> selector))
+  where
+    singleSelector = S.Field <$> identifier
+
+operation :: Parser S.Operation
+operation =
+  choice
+    [ S.Set <$> (lexeme "=" *> expression),
+      S.PlusEq <$> (lexeme "+=" *> expression),
+      S.MinusEq <$> (lexeme "-=" *> expression),
+      S.TimesEq <$> (lexeme "*=" *> expression),
+      S.DivEq <$> (lexeme "/=" *> expression)
+    ]
