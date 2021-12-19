@@ -42,6 +42,7 @@ library
     , scientific
     , text
     , unordered-containers
+    , vector
   default-language: Haskell2010
 
 executable dagl
@@ -62,6 +63,7 @@ executable dagl
     , scientific
     , text
     , unordered-containers
+    , vector
   default-language: Haskell2010
 
 test-suite data-glasses-test
@@ -85,4 +87,5 @@ test-suite data-glasses-test
     , scientific
     , text
     , unordered-containers
+    , vector
   default-language: Haskell2010

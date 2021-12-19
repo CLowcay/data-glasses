@@ -19,6 +19,8 @@ data Expr
 
 data Selector
   = Field Identifier
+  | Index Int
+  | Slice (Maybe Int) (Maybe Int)
   | Compose Selector Selector
   deriving (Eq, Show)
 

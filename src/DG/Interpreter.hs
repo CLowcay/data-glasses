@@ -8,13 +8,25 @@ import Data.Foldable (toList)
 import Data.Functor ((<&>))
 import Data.HashMap.Strict (HashMap, (!?))
 import qualified Data.HashMap.Strict as HM
+import Data.Maybe (fromMaybe)
 import Data.Scientific (Scientific)
 import Data.Text (Text)
+import Data.Vector ((!), (//))
+import qualified Data.Vector as V
 
 get :: S.Selector -> J.Value -> [J.Value]
 get s v = case s of
   S.Field (S.Identifier name) -> case v of
     J.Object o -> toList (o !? name)
+    _ -> []
+  S.Index i -> case v of
+    J.Array a -> [a ! i | i >= 0 && i < V.length a]
+    _ -> []
+  S.Slice from to -> case v of
+    J.Array a ->
+      let efrom = fromMaybe 0 from
+          rlen = fromMaybe (V.length a) to - efrom
+       in toList (V.slice efrom rlen a)
     _ -> []
   S.Compose s1 s2 -> get s1 v >>= get s2
 
@@ -22,6 +34,17 @@ tmap :: S.Selector -> (J.Value -> J.Value) -> J.Value -> J.Value
 tmap s f v = case s of
   S.Field (S.Identifier name) -> case v of
     J.Object o -> J.Object (HM.update (pure . f) name o)
+    _ -> v
+  S.Index i -> case v of
+    J.Array a ->
+      if i >= 0 && i < V.length a
+        then J.Array (a // [(i, f (a ! i))])
+        else v
+    _ -> v
+  S.Slice from to -> case v of
+    J.Array a ->
+      let inRange i = maybe True (i >=) from && maybe True (i <) to
+       in J.Array (V.imap (\i x -> if inRange i then f x else x) a)
     _ -> v
   S.Compose s1 s2 -> tmap s1 (tmap s2 f) v
 

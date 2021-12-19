@@ -29,6 +29,7 @@ dependencies:
   - scientific
   - text
   - unordered-containers
+  - vector
 
 library:
   source-dirs: src

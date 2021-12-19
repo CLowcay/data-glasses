@@ -8,7 +8,7 @@ import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Void (Void)
-import Text.Megaparsec (MonadParsec (try), Parsec, choice, empty, many, satisfy)
+import Text.Megaparsec (MonadParsec (try), Parsec, between, choice, empty, many, satisfy)
 import Text.Megaparsec.Char (alphaNumChar, letterChar, space1)
 import qualified Text.Megaparsec.Char.Lexer as L
 
@@ -48,12 +48,23 @@ expression = do
 dot :: Parser ()
 dot = () <$ lexeme "."
 
+dotdot :: Parser ()
+dotdot = () <$ lexeme ".."
+
 selector :: Parser S.Selector
 selector = do
   s1 <- singleSelector
   fromMaybe s1 <$> (optional . try) (dot *> (S.Compose s1 <$> selector))
   where
-    singleSelector = S.Field <$> identifier
+    singleSelector =
+      choice
+        [ S.Field <$> try identifier,
+          try (brackets (S.Slice <$> optional number <*> (dotdot *> optional number))),
+          try (brackets (S.Index <$> number))
+        ]
+
+brackets :: Parser a -> Parser a
+brackets = between (lexeme "[") (lexeme "]")
 
 operation :: Parser S.Operation
 operation =
