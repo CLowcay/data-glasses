@@ -10,14 +10,14 @@ import qualified Data.Aeson as J
 import qualified Data.HashMap.Strict as HM
 import Data.Text (Text)
 import Test.Hspec (Spec, describe, hspec, it, parallel, shouldBe, specify)
-import Text.Megaparsec (errorBundlePretty, runParser)
+import Text.Megaparsec (eof, errorBundlePretty, runParser)
 
 main :: IO ()
 main = hspec spec
 
 example :: Text -> J.Value -> Either String [J.Value] -> IO ()
 example expr input expected = do
-  case runParser expression "expression" expr of
+  case runParser (expression <* eof) "expression" expr of
     Left errors -> Left (errorBundlePretty errors) `shouldBe` expected
     Right program ->
       evaluate (HM.fromList [(S.Identifier "x", input)]) program `shouldBe` expected
@@ -36,3 +36,8 @@ spec = parallel $ do
   describe "set" $ do
     specify "x.a = 'xyz' in {a:null} is {a:'xyz'}" $
       example "x.a = \"xyz\"" (J.object [("a", J.Null)]) (Right [J.object [("a", J.String "xyz")]])
+  describe "delete" $ do
+    specify "x.a = delete in {a:'xyz', b:123} is {b:123}" $
+      example "x.a = delete" (J.object [("a", J.String "xyz"), ("b", J.Number 123)]) (Right [J.object [("b", J.Number 123)]])
+    specify "x.a.b = delete in {a:{b: 'xyz', c:null}, b:123} is {a:{c:null}, b:123}" $
+      example "x.a.b = delete" (J.object [("a", J.object [("b", J.String "xyz"), ("c", J.Null)]), ("b", J.Number 123)]) (Right [J.object [("a", J.object [("c", J.Null)]), ("b", J.Number 123)]])

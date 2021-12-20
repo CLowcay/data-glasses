@@ -26,6 +26,7 @@ data Selector
 
 data Operation
   = Get
+  | Delete
   | Set Expr
   | PlusEq Expr
   | MinusEq Expr

@@ -69,7 +69,8 @@ brackets = between (lexeme "[") (lexeme "]")
 operation :: Parser S.Operation
 operation =
   choice
-    [ S.Set <$> (lexeme "=" *> expression),
+    [ S.Delete <$ try (lexeme "=" <* lexeme "delete"),
+      S.Set <$> (lexeme "=" *> expression),
       S.PlusEq <$> (lexeme "+=" *> expression),
       S.MinusEq <$> (lexeme "-=" *> expression),
       S.TimesEq <$> (lexeme "*=" *> expression),

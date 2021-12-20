@@ -5,6 +5,7 @@ module DG.Interpreter where
 import qualified DG.Syntax as S
 import qualified Data.Aeson as J
 import Data.Foldable (toList)
+import Data.Function
 import Data.Functor ((<&>))
 import Data.HashMap.Strict (HashMap, (!?))
 import qualified Data.HashMap.Strict as HM
@@ -29,6 +30,24 @@ get s v = case s of
        in toList (V.slice efrom rlen a)
     _ -> []
   S.Compose s1 s2 -> get s1 v >>= get s2
+
+delete :: S.Selector -> J.Value -> J.Value
+delete s v = case s of
+  S.Field (S.Identifier name) -> case v of
+    J.Object o -> J.Object (HM.delete name o)
+    _ -> v
+  S.Index i -> case v of
+    J.Array a -> J.Array (let (a1, rs) = V.splitAt i a in a1 <> V.drop 1 rs)
+    _ -> v
+  S.Slice from to -> case v of
+    J.Array a ->
+      let efrom = fromMaybe 0 from
+          rlen = fromMaybe (V.length a) to - efrom
+          (hs, as) = V.splitAt efrom a
+          (_, ts) = V.splitAt rlen as
+       in J.Array (hs <> ts)
+    _ -> v
+  S.Compose s1 s2 -> tmap s1 (delete s2) v
 
 tmap :: S.Selector -> (J.Value -> J.Value) -> J.Value -> J.Value
 tmap s f v = case s of
@@ -60,6 +79,7 @@ evaluate ctx e = case e of
     v <- evaluate ctx expr
     case operation of
       S.Get -> Right (get selector =<< v)
+      S.Delete -> Right (delete selector <$> v)
       S.Set ex ->
         evaluate ctx ex >>= asSingle <&> \x -> tmap selector (const x) <$> v
       S.PlusEq ex ->

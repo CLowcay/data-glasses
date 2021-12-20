@@ -14,12 +14,12 @@ import qualified Data.HashMap.Strict as HM
 import qualified Data.Text as T
 import qualified Data.Text.Lazy.IO as LT
 import System.Environment (getArgs)
-import Text.Megaparsec (errorBundlePretty, parseErrorPretty, runParser)
+import Text.Megaparsec (eof, errorBundlePretty, parseErrorPretty, runParser)
 
 main :: IO ()
 main = do
   [rawProgram] <- getArgs
-  case runParser expression "expression" (T.pack rawProgram) of
+  case runParser (expression <* eof) "expression" (T.pack rawProgram) of
     Left errorBundle -> putStrLn (errorBundlePretty errorBundle)
     Right program -> do
       stdin <- LB.getContents
