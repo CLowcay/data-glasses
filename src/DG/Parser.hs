@@ -17,6 +17,9 @@ type Parser = Parsec Void Text
 lexeme :: Parser a -> Parser a
 lexeme = L.lexeme (L.space space1 empty empty)
 
+boolean :: Parser Bool
+boolean = choice [True <$ lexeme "true", False <$ lexeme "false"]
+
 number :: Parser Int
 number = lexeme (L.signed empty L.decimal)
 
@@ -34,6 +37,8 @@ expression = do
     choice
       [ S.NumLit <$> try number,
         S.StringLit <$> try string,
+        S.NullLit <$ try (lexeme "null"),
+        S.BoolLit <$> try boolean,
         S.Variable <$> identifier
       ]
 

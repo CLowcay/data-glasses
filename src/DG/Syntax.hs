@@ -14,6 +14,8 @@ data Expr
   = Variable Identifier
   | StringLit Text
   | NumLit Int
+  | BoolLit Bool
+  | NullLit
   | Selection Expr Selector Operation
   deriving (Eq, Show)
 

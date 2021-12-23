@@ -75,6 +75,8 @@ evaluate ctx e = case e of
     maybe (Left ("Undefined variable " ++ show var)) (Right . pure) (ctx !? var)
   S.StringLit text -> Right [J.String text]
   S.NumLit n -> Right [J.Number (fromIntegral n)]
+  S.NullLit -> Right [J.Null]
+  S.BoolLit b -> Right [J.Bool b]
   S.Selection expr selector operation -> do
     v <- evaluate ctx expr
     case operation of
