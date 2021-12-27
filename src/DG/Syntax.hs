@@ -16,6 +16,7 @@ data Expr
   | NumLit Int
   | BoolLit Bool
   | NullLit
+  | Array [Expr]
   | Selection Expr Selector Operation
   deriving (Eq, Show)
 

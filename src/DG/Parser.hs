@@ -8,7 +8,7 @@ import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Void (Void)
-import Text.Megaparsec (MonadParsec (try), Parsec, between, choice, empty, many, satisfy)
+import Text.Megaparsec (MonadParsec (try), Parsec, between, choice, empty, many, satisfy, sepBy)
 import Text.Megaparsec.Char (alphaNumChar, letterChar, space1)
 import qualified Text.Megaparsec.Char.Lexer as L
 
@@ -31,11 +31,15 @@ string = lexeme ("\"" *> (T.pack <$> many (try escape <|> satisfy (/= '\"'))) <*
 identifier :: Parser S.Identifier
 identifier = lexeme (S.Identifier . T.pack <$> ((:) <$> letterChar <*> many alphaNumChar))
 
+comma :: Parser ()
+comma = () <$ lexeme ","
+
 expression :: Parser S.Expr
 expression = do
   value <-
     choice
-      [ S.NumLit <$> try number,
+      [ S.Array <$> try (brackets (expression `sepBy` comma)),
+        S.NumLit <$> try number,
         S.StringLit <$> try string,
         S.NullLit <$ try (lexeme "null"),
         S.BoolLit <$> try boolean,

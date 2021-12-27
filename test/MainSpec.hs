@@ -9,6 +9,7 @@ import Data.Aeson (ToJSON, toJSON)
 import qualified Data.Aeson as J
 import qualified Data.HashMap.Strict as HM
 import Data.Text (Text)
+import qualified Data.Vector as V
 import Test.Hspec (Spec, describe, hspec, it, parallel, shouldBe, specify)
 import Text.Megaparsec (eof, errorBundlePretty, runParser)
 
@@ -33,6 +34,13 @@ spec = parallel $ do
       example "x.a.z" (J.object [("a", J.object [("b", J.Number 123)])]) (Right [])
     specify "x.a.b.c.d.e in {a:123} is empty" $ do
       example "x.a.b.d.e" (J.object [("a", J.Number 123)]) (Right [])
+    specify "[1,2,3]" $ do
+      example "[1,2,3]" J.Null (Right [J.Array (V.fromList (J.Number <$> [1, 2, 3]))])
+    specify "x.b = [a.a.[..]] in {a:[1,2], b:null}" $ do
+      example
+        "x.b = [\"a\", x.a.[..]]"
+        (J.object [("a", J.Array (V.fromList (J.Number <$> [1, 2]))), ("b", J.Null)])
+        (Right [J.object [("b", J.Array (V.fromList [J.String "a", J.Number 1, J.Number 2])), ("a", J.Array (V.fromList (J.Number <$> [1, 2])))]])
   describe "set" $ do
     specify "x.a = 'xyz' in {a:null} is {a:'xyz'}" $
       example "x.a = \"xyz\"" (J.object [("a", J.Null)]) (Right [J.object [("a", J.String "xyz")]])

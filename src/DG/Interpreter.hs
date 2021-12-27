@@ -1,11 +1,12 @@
 {-# LANGUAGE LambdaCase #-}
+{-# OPTIONS_GHC -Wno-deferred-out-of-scope-variables #-}
 
 module DG.Interpreter where
 
+import Control.Monad (join)
 import qualified DG.Syntax as S
 import qualified Data.Aeson as J
 import Data.Foldable (toList)
-import Data.Function
 import Data.Functor ((<&>))
 import Data.HashMap.Strict (HashMap, (!?))
 import qualified Data.HashMap.Strict as HM
@@ -77,6 +78,7 @@ evaluate ctx e = case e of
   S.NumLit n -> Right [J.Number (fromIntegral n)]
   S.NullLit -> Right [J.Null]
   S.BoolLit b -> Right [J.Bool b]
+  S.Array as -> pure . J.Array . V.fromList . join <$> traverse (evaluate ctx) as
   S.Selection expr selector operation -> do
     v <- evaluate ctx expr
     case operation of
