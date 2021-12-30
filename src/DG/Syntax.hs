@@ -31,6 +31,7 @@ data Operation
   = Get
   | Delete
   | Set Expr
+  | SetAs Identifier Expr
   | PlusEq Expr
   | MinusEq Expr
   | TimesEq Expr

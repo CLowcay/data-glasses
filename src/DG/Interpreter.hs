@@ -4,6 +4,7 @@
 module DG.Interpreter where
 
 import Control.Monad (join)
+import Control.Monad.Identity (runIdentity)
 import qualified DG.Syntax as S
 import qualified Data.Aeson as J
 import Data.Foldable (toList)
@@ -48,24 +49,26 @@ delete s v = case s of
           (_, ts) = V.splitAt rlen as
        in J.Array (hs <> ts)
     _ -> v
-  S.Compose s1 s2 -> tmap s1 (delete s2) v
+  S.Compose s1 s2 -> runIdentity (tmap s1 (pure . delete s2) v)
 
-tmap :: S.Selector -> (J.Value -> J.Value) -> J.Value -> J.Value
+tmap :: Monad t => S.Selector -> (J.Value -> t J.Value) -> J.Value -> t J.Value
 tmap s f v = case s of
   S.Field (S.Identifier name) -> case v of
-    J.Object o -> J.Object (HM.update (pure . f) name o)
-    _ -> v
+    J.Object o -> case o !? name of
+      Nothing -> pure (J.Object o)
+      Just v -> f v <&> \v' -> J.Object (HM.insert name v' o)
+    _ -> pure v
   S.Index i -> case v of
     J.Array a ->
       if i >= 0 && i < V.length a
-        then J.Array (a // [(i, f (a ! i))])
-        else v
-    _ -> v
+        then f (a ! i) <&> \v -> J.Array (a // [(i, v)])
+        else pure v
+    _ -> pure v
   S.Slice from to -> case v of
     J.Array a ->
       let inRange i = maybe True (i >=) from && maybe True (i <) to
-       in J.Array (V.imap (\i x -> if inRange i then f x else x) a)
-    _ -> v
+       in J.Array <$> V.imapM (\i x -> if inRange i then f x else pure x) a
+    _ -> pure v
   S.Compose s1 s2 -> tmap s1 (tmap s2 f) v
 
 type Context = HashMap S.Identifier J.Value
@@ -85,15 +88,16 @@ evaluate ctx e = case e of
       S.Get -> Right (get selector =<< v)
       S.Delete -> Right (delete selector <$> v)
       S.Set ex ->
-        evaluate ctx ex >>= asSingle <&> \x -> tmap selector (const x) <$> v
+        evaluate ctx ex >>= asSingle >>= \x -> traverse (tmap selector (Right . const x)) v
+      S.SetAs var ex -> traverse (tmap selector (\x -> evaluate (HM.insert var x ctx) ex >>= asSingle)) v
       S.PlusEq ex ->
-        evaluate ctx ex >>= asSingle >>= asNumber <&> \x -> tmap selector (numOp (+ x)) <$> v
+        evaluate ctx ex >>= asSingle >>= asNumber >>= \x -> traverse (tmap selector (Right . numOp (+ x))) v
       S.MinusEq ex ->
-        evaluate ctx ex >>= asSingle >>= asNumber <&> \x -> tmap selector (numOp (subtract x)) <$> v
+        evaluate ctx ex >>= asSingle >>= asNumber >>= \x -> traverse (tmap selector (Right . numOp (subtract x))) v
       S.TimesEq ex ->
-        evaluate ctx ex >>= asSingle >>= asNumber <&> \x -> tmap selector (numOp (* x)) <$> v
+        evaluate ctx ex >>= asSingle >>= asNumber >>= \x -> traverse (tmap selector (Right . numOp (* x))) v
       S.DivEq ex ->
-        evaluate ctx ex >>= asSingle >>= asNumber <&> \x -> tmap selector (numOp (/ x)) <$> v
+        evaluate ctx ex >>= asSingle >>= asNumber >>= \x -> traverse (tmap selector (Right . numOp (/ x))) v
 
 asSingle :: [J.Value] -> Either String J.Value
 asSingle [x] = Right x

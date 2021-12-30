@@ -80,6 +80,7 @@ operation =
   choice
     [ S.Delete <$ try (lexeme "=" <* lexeme "delete"),
       S.Set <$> (lexeme "=" *> expression),
+      S.SetAs <$> (lexeme "as" *> identifier <* lexeme "=") <*> expression,
       S.PlusEq <$> (lexeme "+=" *> expression),
       S.MinusEq <$> (lexeme "-=" *> expression),
       S.TimesEq <$> (lexeme "*=" *> expression),
