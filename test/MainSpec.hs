@@ -2,7 +2,7 @@
 
 module MainSpec where
 
-import DG.Interpreter (evaluate)
+import DG.Interpreter (Value (..), evaluate)
 import DG.Parser (expression)
 import qualified DG.Syntax as S
 import Data.Aeson (ToJSON, toJSON)
@@ -21,7 +21,7 @@ example expr input expected = do
   case runParser (expression <* eof) "expression" expr of
     Left errors -> Left (errorBundlePretty errors) `shouldBe` expected
     Right program ->
-      evaluate (HM.fromList [(S.Identifier "x", input)]) program `shouldBe` expected
+      evaluate (HM.fromList [(S.Identifier "x", JSON input)]) program `shouldBe` expected
 
 spec :: Spec
 spec = parallel $ do
