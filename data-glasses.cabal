@@ -40,6 +40,7 @@ library
     , hashable
     , megaparsec
     , mtl
+    , parser-combinators
     , scientific
     , text
     , unordered-containers
@@ -62,6 +63,7 @@ executable dagl
     , hashable
     , megaparsec
     , mtl
+    , parser-combinators
     , scientific
     , text
     , unordered-containers
@@ -87,6 +89,7 @@ test-suite data-glasses-test
     , hspec
     , megaparsec
     , mtl
+    , parser-combinators
     , scientific
     , text
     , unordered-containers

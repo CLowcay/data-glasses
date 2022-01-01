@@ -27,6 +27,7 @@ dependencies:
   - hashable
   - megaparsec
   - mtl
+  - parser-combinators
   - scientific
   - text
   - unordered-containers

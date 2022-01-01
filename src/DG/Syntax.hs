@@ -18,6 +18,7 @@ data Expr
   | NullLit
   | Array [Expr]
   | Selection Expr Selector Operation
+  | Binop Binop Expr Expr
   deriving (Eq, Show)
 
 data Selector
@@ -40,4 +41,21 @@ data Operation
   | MinusEq Expr
   | TimesEq Expr
   | DivEq Expr
+  | ConcatEq Expr
+  deriving (Eq, Show)
+
+data Binop
+  = Plus
+  | Minus
+  | Times
+  | Divide
+  | Eq
+  | Neq
+  | Gt
+  | Lt
+  | Gte
+  | Lte
+  | And
+  | Or
+  | Concat
   deriving (Eq, Show)

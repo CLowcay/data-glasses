@@ -3,12 +3,13 @@
 module DG.Parser (expression) where
 
 import Control.Applicative (optional, (<|>))
+import Control.Monad.Combinators.Expr (Operator (..), makeExprParser)
 import qualified DG.Syntax as S
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Void (Void)
-import Text.Megaparsec (MonadParsec (try), Parsec, between, choice, empty, many, satisfy, sepBy)
+import Text.Megaparsec (MonadParsec (notFollowedBy, try), Parsec, between, choice, empty, many, satisfy, sepBy)
 import Text.Megaparsec.Char (alphaNumChar, letterChar, space1)
 import qualified Text.Megaparsec.Char.Lexer as L
 
@@ -35,10 +36,29 @@ comma :: Parser ()
 comma = () <$ lexeme ","
 
 expression :: Parser S.Expr
-expression = do
+expression =
+  makeExprParser
+    term
+    [ [InfixL (S.Binop S.Times <$ lexeme "*"), InfixL (S.Binop S.Divide <$ lexeme "/")],
+      [InfixL (S.Binop S.Plus <$ lexeme "+"), InfixL (S.Binop S.Minus <$ lexeme "-")],
+      [InfixL (S.Binop S.Concat <$ lexeme "++")],
+      [ InfixN (S.Binop S.Eq <$ lexeme "=="),
+        InfixN (S.Binop S.Neq <$ lexeme "!="),
+        InfixN (S.Binop S.Gt <$ lexeme ">"),
+        InfixN (S.Binop S.Lt <$ lexeme "<"),
+        InfixN (S.Binop S.Gte <$ lexeme ">="),
+        InfixN (S.Binop S.Lte <$ lexeme "<=")
+      ],
+      [InfixL (S.Binop S.And <$ lexeme "and")],
+      [InfixL (S.Binop S.Or <$ lexeme "or")]
+    ]
+
+term :: Parser S.Expr
+term = do
   value <-
     choice
-      [ S.Array <$> try (brackets (expression `sepBy` comma)),
+      [ parentheses expression,
+        S.Array <$> try (brackets (expression `sepBy` comma)),
         S.NumLit <$> try number,
         S.StringLit <$> try string,
         S.NullLit <$ try (lexeme "null"),
@@ -47,10 +67,10 @@ expression = do
       ]
 
   selection <-
-    optional . try $
+    optional $
       lexeme dot *> do
         S.Selection value <$> selector
-          <*> (fromMaybe S.Get <$> optional (try operation))
+          <*> (fromMaybe S.Get <$> optional operation)
 
   pure (fromMaybe value selection)
 
@@ -84,6 +104,9 @@ slice = do
 brackets :: Parser a -> Parser a
 brackets = between (lexeme "[") (lexeme "]")
 
+parentheses :: Parser a -> Parser a
+parentheses = between (lexeme "(") (lexeme ")")
+
 operation :: Parser S.Operation
 operation =
   choice
@@ -93,5 +116,6 @@ operation =
       S.PlusEq <$> (lexeme "+=" *> expression),
       S.MinusEq <$> (lexeme "-=" *> expression),
       S.TimesEq <$> (lexeme "*=" *> expression),
-      S.DivEq <$> (lexeme "/=" *> expression)
+      S.DivEq <$> (lexeme "/=" *> expression),
+      S.ConcatEq <$> (lexeme "++=" *> expression)
     ]

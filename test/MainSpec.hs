@@ -44,6 +44,19 @@ spec = parallel $ do
   describe "set" $ do
     specify "x.a = 'xyz' in {a:null} is {a:'xyz'}" $
       example "x.a = \"xyz\"" (J.object [("a", J.Null)]) (Right [J.object [("a", J.String "xyz")]])
+    specify "x.a as z = z * 3 + 1 in {a:4} is {a:13}" $
+      example "x.a as z = z * 3 + 1" (J.object [("a", J.Number 4)]) (Right [J.object [("a", J.Number 13)]])
+  describe "modify" $ do
+    specify "x.a += 1 in {a:42}" $
+      example "x.a += 1" (J.object [("a", J.Number 42)]) (Right [J.object [("a", J.Number 43)]])
+    specify "x.a -= 1 in {a:42}" $
+      example "x.a -= 1" (J.object [("a", J.Number 42)]) (Right [J.object [("a", J.Number 41)]])
+    specify "x.a *= 2 in {a:42}" $
+      example "x.a *= 2" (J.object [("a", J.Number 42)]) (Right [J.object [("a", J.Number 84)]])
+    specify "x.a /= 2 in {a:42}" $
+      example "x.a /= 2" (J.object [("a", J.Number 42)]) (Right [J.object [("a", J.Number 21)]])
+    specify "x.a ++= 1 in {a:'42'}" $
+      example "x.a ++= \"z\"" (J.object [("a", J.String "42")]) (Right [J.object [("a", J.String "42z")]])
   describe "delete" $ do
     specify "x.a = delete in {a:'xyz', b:123} is {b:123}" $
       example "x.a = delete" (J.object [("a", J.String "xyz"), ("b", J.Number 123)]) (Right [J.object [("b", J.Number 123)]])

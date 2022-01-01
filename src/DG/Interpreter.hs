@@ -82,6 +82,10 @@ evaluate ctx e = case e of
   S.NullLit -> Right [J.Null]
   S.BoolLit b -> Right [J.Bool b]
   S.Array as -> pure . J.Array . V.fromList . join <$> traverse (evaluate ctx) as
+  S.Binop op lExpr rExpr -> do
+    l <- asSingle =<< evaluate ctx lExpr
+    r <- asSingle =<< evaluate ctx rExpr
+    pure <$> applyOp op l r
   S.Selection expr selector operation -> do
     v <- evaluate ctx expr
     case operation of
@@ -98,6 +102,8 @@ evaluate ctx e = case e of
         evaluate ctx ex >>= asSingle >>= asNumber >>= \x -> traverse (tmap selector (Right . numOp (* x))) v
       S.DivEq ex ->
         evaluate ctx ex >>= asSingle >>= asNumber >>= \x -> traverse (tmap selector (Right . numOp (/ x))) v
+      S.ConcatEq ex ->
+        evaluate ctx ex >>= asSingle >>= asString >>= \x -> traverse (tmap selector (Right . stringOp (<> x))) v
 
 asSingle :: [J.Value] -> Either String J.Value
 asSingle [x] = Right x
@@ -108,7 +114,47 @@ asNumber v = case v of
   J.Number n -> Right n
   _ -> Left ("Expected a number, found " ++ show v)
 
+asBool :: J.Value -> Either String Bool
+asBool v = case v of
+  J.Bool n -> Right n
+  _ -> Left ("Expected true or false, found " ++ show v)
+
+asString :: J.Value -> Either String Text
+asString v = case v of
+  J.String n -> Right n
+  _ -> Left ("Expected a string, found " ++ show v)
+
 numOp :: (Scientific -> Scientific) -> J.Value -> J.Value
 numOp f = \case
   J.Number n -> J.Number (f n)
   v -> v
+
+stringOp :: (Text -> Text) -> J.Value -> J.Value
+stringOp f = \case
+  J.String n -> J.String (f n)
+  v -> v
+
+numBinop :: (Scientific -> Scientific -> Scientific) -> J.Value -> J.Value -> Either String J.Value
+numBinop f l r = J.Number <$> (f <$> asNumber l <*> asNumber r)
+
+boolBinop :: (Bool -> Bool -> Bool) -> J.Value -> J.Value -> Either String J.Value
+boolBinop f l r = J.Bool <$> (f <$> asBool l <*> asBool r)
+
+stringBinop :: (Text -> Text -> Text) -> J.Value -> J.Value -> Either String J.Value
+stringBinop f l r = J.String <$> (f <$> asString l <*> asString r)
+
+applyOp :: S.Binop -> J.Value -> J.Value -> Either String J.Value
+applyOp op l r = case op of
+  S.Plus -> numBinop (+) l r
+  S.Minus -> numBinop (-) l r
+  S.Times -> numBinop (*) l r
+  S.Divide -> numBinop (/) l r
+  S.Eq -> pure (J.Bool (l == r))
+  S.Neq -> pure (J.Bool (l /= r))
+  S.Gt -> pure (J.Bool (l > r))
+  S.Lt -> pure (J.Bool (l < r))
+  S.Gte -> pure (J.Bool (l >= r))
+  S.Lte -> pure (J.Bool (l <= r))
+  S.And -> boolBinop (&&) l r
+  S.Or -> boolBinop (||) l r
+  S.Concat -> stringBinop (<>) l r
