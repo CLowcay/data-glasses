@@ -7,7 +7,7 @@ import Data.Hashable (Hashable)
 import Data.Text (Text)
 
 newtype Identifier = Identifier Text
-  deriving stock (Eq, Show)
+  deriving stock (Eq, Ord, Show)
   deriving newtype (Hashable)
 
 data Expr
@@ -18,7 +18,9 @@ data Expr
   | NullLit
   | Array [Expr]
   | Selection Expr Selector Operation
+  | Unop Unop Expr
   | Binop Binop Expr Expr
+  | Apply Expr [Expr]
   deriving (Eq, Show)
 
 data Selector
@@ -43,6 +45,8 @@ data Operation
   | DivEq Expr
   | ConcatEq Expr
   deriving (Eq, Show)
+
+data Unop = Not deriving (Eq, Show)
 
 data Binop
   = Plus

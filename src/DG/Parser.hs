@@ -9,7 +9,7 @@ import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Void (Void)
-import Text.Megaparsec (MonadParsec (notFollowedBy, try), Parsec, between, choice, empty, many, satisfy, sepBy)
+import Text.Megaparsec (MonadParsec (try), Parsec, between, choice, empty, many, satisfy, sepBy)
 import Text.Megaparsec.Char (alphaNumChar, letterChar, space1)
 import qualified Text.Megaparsec.Char.Lexer as L
 
@@ -39,7 +39,8 @@ expression :: Parser S.Expr
 expression =
   makeExprParser
     term
-    [ [InfixL (S.Binop S.Times <$ lexeme "*"), InfixL (S.Binop S.Divide <$ lexeme "/")],
+    [ [Prefix (S.Unop S.Not <$ lexeme "!")],
+      [InfixL (S.Binop S.Times <$ lexeme "*"), InfixL (S.Binop S.Divide <$ lexeme "/")],
       [InfixL (S.Binop S.Plus <$ lexeme "+"), InfixL (S.Binop S.Minus <$ lexeme "-")],
       [InfixL (S.Binop S.Concat <$ lexeme "++")],
       [ InfixN (S.Binop S.Eq <$ lexeme "=="),
@@ -72,7 +73,10 @@ term = do
         S.Selection value <$> selector
           <*> (fromMaybe S.Get <$> optional operation)
 
-  pure (fromMaybe value selection)
+  mParameters <- optional (parentheses (expression `sepBy` comma))
+  case mParameters of
+    Nothing -> pure (fromMaybe value selection)
+    Just parameters -> pure (S.Apply (fromMaybe value selection) parameters)
 
 dot :: Parser ()
 dot = () <$ lexeme "."

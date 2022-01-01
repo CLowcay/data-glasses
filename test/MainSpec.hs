@@ -2,15 +2,15 @@
 
 module MainSpec where
 
-import DG.Interpreter (Value (..), evaluate)
+import DG.Interpreter (evaluate, initialContext)
 import DG.Parser (expression)
+import DG.Runtime (Value (..))
 import qualified DG.Syntax as S
-import Data.Aeson (ToJSON, toJSON)
 import qualified Data.Aeson as J
-import qualified Data.HashMap.Strict as HM
+import qualified Data.Map as M
 import Data.Text (Text)
 import qualified Data.Vector as V
-import Test.Hspec (Spec, describe, hspec, it, parallel, shouldBe, specify)
+import Test.Hspec (Spec, describe, hspec, parallel, shouldBe, specify)
 import Text.Megaparsec (eof, errorBundlePretty, runParser)
 
 main :: IO ()
@@ -21,7 +21,7 @@ example expr input expected = do
   case runParser (expression <* eof) "expression" expr of
     Left errors -> Left (errorBundlePretty errors) `shouldBe` expected
     Right program ->
-      evaluate (HM.fromList [(S.Identifier "x", JSON input)]) program `shouldBe` expected
+      evaluate (M.insert (S.Identifier "x") (JSON input) initialContext) program `shouldBe` expected
 
 spec :: Spec
 spec = parallel $ do
@@ -62,3 +62,6 @@ spec = parallel $ do
       example "x.a = delete" (J.object [("a", J.String "xyz"), ("b", J.Number 123)]) (Right [J.object [("b", J.Number 123)]])
     specify "x.a.b = delete in {a:{b: 'xyz', c:null}, b:123} is {a:{c:null}, b:123}" $
       example "x.a.b = delete" (J.object [("a", J.object [("b", J.String "xyz"), ("c", J.Null)]), ("b", J.Number 123)]) (Right [J.object [("a", J.object [("c", J.Null)]), ("b", J.Number 123)]])
+  describe "boolean expressions" $ do
+    specify "!(true or false) == !true and !false" $
+      example "!(true or false) == !true and !false" J.Null (Right [J.Bool True])

@@ -33,6 +33,9 @@ dependencies:
   - unordered-containers
   - vector
 
+ghc-options:
+  - -Wall
+
 library:
   source-dirs: src
 
