@@ -22,14 +22,14 @@ get s v = case s of
   S.Field (S.Identifier name) -> case v of
     J.Object o -> toList (o !? name)
     _ -> []
-  S.Index i -> case v of
-    J.Array a -> [a ! i | i >= 0 && i < V.length a]
-    _ -> []
-  S.Slice from to -> case v of
+  S.Slice slice -> case v of
     J.Array a ->
-      let efrom = fromMaybe 0 from
-          rlen = fromMaybe (V.length a) to - efrom
-       in toList (V.slice efrom rlen a)
+      case slice of
+        S.Index i -> [a ! i | i >= 0 && i < V.length a]
+        S.Range from to _ ->
+          let efrom = fromMaybe 0 from
+              rlen = fromMaybe (V.length a) to - efrom
+           in toList (V.slice efrom rlen a)
     _ -> []
   S.Compose s1 s2 -> get s1 v >>= get s2
 
@@ -38,16 +38,16 @@ delete s v = case s of
   S.Field (S.Identifier name) -> case v of
     J.Object o -> J.Object (HM.delete name o)
     _ -> v
-  S.Index i -> case v of
-    J.Array a -> J.Array (let (a1, rs) = V.splitAt i a in a1 <> V.drop 1 rs)
-    _ -> v
-  S.Slice from to -> case v of
+  S.Slice slice -> case v of
     J.Array a ->
-      let efrom = fromMaybe 0 from
-          rlen = fromMaybe (V.length a) to - efrom
-          (hs, as) = V.splitAt efrom a
-          (_, ts) = V.splitAt rlen as
-       in J.Array (hs <> ts)
+      case slice of
+        S.Index i -> J.Array (let (a1, rs) = V.splitAt i a in a1 <> V.drop 1 rs)
+        S.Range from to _ ->
+          let efrom = fromMaybe 0 from
+              rlen = fromMaybe (V.length a) to - efrom
+              (hs, as) = V.splitAt efrom a
+              (_, ts) = V.splitAt rlen as
+           in J.Array (hs <> ts)
     _ -> v
   S.Compose s1 s2 -> runIdentity (tmap s1 (pure . delete s2) v)
 
@@ -58,16 +58,16 @@ tmap s f v = case s of
       Nothing -> pure (J.Object o)
       Just v -> f v <&> \v' -> J.Object (HM.insert name v' o)
     _ -> pure v
-  S.Index i -> case v of
+  S.Slice slice -> case v of
     J.Array a ->
-      if i >= 0 && i < V.length a
-        then f (a ! i) <&> \v -> J.Array (a // [(i, v)])
-        else pure v
-    _ -> pure v
-  S.Slice from to -> case v of
-    J.Array a ->
-      let inRange i = maybe True (i >=) from && maybe True (i <) to
-       in J.Array <$> V.imapM (\i x -> if inRange i then f x else pure x) a
+      case slice of
+        S.Index i ->
+          if i >= 0 && i < V.length a
+            then f (a ! i) <&> \v -> J.Array (a // [(i, v)])
+            else pure v
+        S.Range from to _ ->
+          let inRange i = maybe True (i >=) from && maybe True (i <) to
+           in J.Array <$> V.imapM (\i x -> if inRange i then f x else pure x) a
     _ -> pure v
   S.Compose s1 s2 -> tmap s1 (tmap s2 f) v
 

@@ -22,9 +22,13 @@ data Expr
 
 data Selector
   = Field Identifier
-  | Index Int
-  | Slice (Maybe Int) (Maybe Int)
+  | Slice Slice
   | Compose Selector Selector
+  deriving (Eq, Show)
+
+data Slice
+  = Index Int
+  | Range (Maybe Int) (Maybe Int) (Maybe Int)
   deriving (Eq, Show)
 
 data Operation

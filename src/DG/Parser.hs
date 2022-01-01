@@ -57,8 +57,8 @@ expression = do
 dot :: Parser ()
 dot = () <$ lexeme "."
 
-dotdot :: Parser ()
-dotdot = () <$ lexeme ".."
+colon :: Parser ()
+colon = () <$ lexeme ":"
 
 selector :: Parser S.Selector
 selector = do
@@ -68,9 +68,18 @@ selector = do
     singleSelector =
       choice
         [ S.Field <$> try identifier,
-          try (brackets (S.Slice <$> optional number <*> (dotdot *> optional number))),
-          try (brackets (S.Index <$> number))
+          S.Slice <$> try (brackets slice)
         ]
+
+slice :: Parser S.Slice
+slice = do
+  from <- optional number
+  choice
+    [ try (S.Range from <$> (colon *> optional number) <*> optional (colon *> number)),
+      case from of
+        Nothing -> fail "Expected an index or range"
+        Just index -> pure (S.Index index)
+    ]
 
 brackets :: Parser a -> Parser a
 brackets = between (lexeme "[") (lexeme "]")

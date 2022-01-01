@@ -36,9 +36,9 @@ spec = parallel $ do
       example "x.a.b.d.e" (J.object [("a", J.Number 123)]) (Right [])
     specify "[1,2,3]" $ do
       example "[1,2,3]" J.Null (Right [J.Array (V.fromList (J.Number <$> [1, 2, 3]))])
-    specify "x.b = [a.a.[..]] in {a:[1,2], b:null}" $ do
+    specify "x.b = [a.a.[:]] in {a:[1,2], b:null}" $ do
       example
-        "x.b = [\"a\", x.a.[..]]"
+        "x.b = [\"a\", x.a.[:]]"
         (J.object [("a", J.Array (V.fromList (J.Number <$> [1, 2]))), ("b", J.Null)])
         (Right [J.object [("b", J.Array (V.fromList [J.String "a", J.Number 1, J.Number 2])), ("a", J.Array (V.fromList (J.Number <$> [1, 2])))]])
   describe "set" $ do
