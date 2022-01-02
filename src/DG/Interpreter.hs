@@ -2,8 +2,7 @@
 
 module DG.Interpreter (evaluate, initialContext) where
 
-import Control.Monad (join, (<=<))
-import Control.Monad.Identity (runIdentity)
+import Control.Monad (filterM, join, (<=<))
 import DG.BuiltinFunctions (isArray, isBool, isNull, isNumber, isObject, isString)
 import DG.Runtime (Function, Value (..))
 import qualified DG.Syntax as S
@@ -39,59 +38,81 @@ lookupValue ctx var = lookupCtx ctx var >>= \case JSON v -> pure v; v -> Left ("
 lookupFunction :: Context -> S.Identifier -> Either String Function
 lookupFunction ctx var = lookupCtx ctx var >>= \case Function v -> pure v; _ -> Left (show var ++ " is not a function")
 
-get :: S.Selector -> J.Value -> [J.Value]
-get s v = case s of
+get :: Context -> S.Selector -> J.Value -> Either String [J.Value]
+get ctx s v = case s of
   S.Field (S.Identifier name) -> case v of
-    J.Object o -> toList (o !? name)
-    _ -> []
-  S.Slice slice -> case v of
-    J.Array a ->
-      case slice of
-        S.Index i -> [a ! i | i >= 0 && i < V.length a]
-        S.Range from to _ ->
-          let efrom = fromMaybe 0 from
-              rlen = fromMaybe (V.length a) to - efrom
-           in toList (V.slice efrom rlen a)
-    _ -> []
-  S.Compose s1 s2 -> get s1 v >>= get s2
-
-delete :: S.Selector -> J.Value -> J.Value
-delete s v = case s of
-  S.Field (S.Identifier name) -> case v of
-    J.Object o -> J.Object (HM.delete name o)
-    _ -> v
-  S.Slice slice -> case v of
-    J.Array a ->
-      case slice of
-        S.Index i -> J.Array (let (a1, rs) = V.splitAt i a in a1 <> V.drop 1 rs)
-        S.Range from to _ ->
-          let efrom = fromMaybe 0 from
-              rlen = fromMaybe (V.length a) to - efrom
-              (hs, as) = V.splitAt efrom a
-              (_, ts) = V.splitAt rlen as
-           in J.Array (hs <> ts)
-    _ -> v
-  S.Compose s1 s2 -> runIdentity (tmap s1 (pure . delete s2) v)
-
-tmap :: Monad t => S.Selector -> (J.Value -> t J.Value) -> J.Value -> t J.Value
-tmap s f v = case s of
-  S.Field (S.Identifier name) -> case v of
-    J.Object o -> case o !? name of
-      Nothing -> pure (J.Object o)
-      Just v -> f v <&> \v' -> J.Object (HM.insert name v' o)
-    _ -> pure v
-  S.Slice slice -> case v of
+    J.Object o -> Right (toList (o !? name))
+    _ -> pure []
+  S.Slice slice mFilter -> case v of
     J.Array a ->
       case slice of
         S.Index i ->
           if i >= 0 && i < V.length a
-            then f (a ! i) <&> \v -> J.Array (a // [(i, v)])
+            then evaluateMaybeFilter ctx mFilter (a ! i) <&> \filterPassed -> [a ! i | filterPassed]
+            else pure []
+        S.Range from to _ ->
+          let efrom = fromMaybe 0 from
+              rlen = fromMaybe (V.length a) to - efrom
+           in filterM (evaluateMaybeFilter ctx mFilter) (toList (V.slice efrom rlen a))
+    _ -> pure []
+  S.Compose s1 s2 -> do
+    r1s <- get ctx s1 v
+    concat <$> traverse (get ctx s2) r1s
+
+delete :: Context -> S.Selector -> J.Value -> Either String J.Value
+delete ctx s v = case s of
+  S.Field (S.Identifier name) -> case v of
+    J.Object o -> Right (J.Object (HM.delete name o))
+    _ -> pure v
+  S.Slice slice mFilter -> case v of
+    J.Array a ->
+      case slice of
+        S.Index i ->
+          if i >= 0 && i < V.length a
+            then
+              evaluateMaybeFilter ctx mFilter (a ! i) <&> \filterPassed ->
+                if filterPassed
+                  then J.Array (let (a1, rs) = V.splitAt i a in a1 <> V.drop 1 rs)
+                  else v
+            else pure v
+        S.Range from to _ ->
+          J.Array . V.fromList . fmap snd
+            <$> filterM
+              ( \(i, x) ->
+                  if i >= fromMaybe 0 from && i < fromMaybe (V.length a) to
+                    then not <$> evaluateMaybeFilter ctx mFilter x
+                    else pure True
+              )
+              ([0 ..] `zip` V.toList a)
+    _ -> pure v
+  S.Compose s1 s2 -> tmap ctx s1 (delete ctx s2) v
+
+tmap :: Context -> S.Selector -> (J.Value -> Either String J.Value) -> J.Value -> Either String J.Value
+tmap ctx s f v = case s of
+  S.Field (S.Identifier name) -> case v of
+    J.Object o -> case o !? name of
+      Nothing -> pure (J.Object o)
+      Just vk -> f vk <&> \v' -> J.Object (HM.insert name v' o)
+    _ -> pure v
+  S.Slice slice mFilter -> case v of
+    J.Array a ->
+      case slice of
+        S.Index i ->
+          if i >= 0 && i < V.length a
+            then
+              evaluateMaybeFilter ctx mFilter (a ! i) >>= \filterPassed ->
+                if filterPassed
+                  then f (a ! i) <&> \vi -> J.Array (a // [(i, vi)])
+                  else pure v
             else pure v
         S.Range from to _ ->
           let inRange i = maybe True (i >=) from && maybe True (i <) to
-           in J.Array <$> V.imapM (\i x -> if inRange i then f x else pure x) a
+              mapElement i x =
+                evaluateMaybeFilter ctx mFilter x >>= \filterPassed ->
+                  if filterPassed && inRange i then f x else pure x
+           in J.Array <$> V.imapM mapElement a
     _ -> pure v
-  S.Compose s1 s2 -> tmap s1 (tmap s2 f) v
+  S.Compose s1 s2 -> tmap ctx s1 (tmap ctx s2 f) v
 
 evaluateFunction :: Context -> S.Expr -> Either String Function
 evaluateFunction ctx e = case e of
@@ -120,21 +141,31 @@ evaluate ctx e = case e of
   S.Selection expr selector operation -> do
     v <- evaluate ctx expr
     case operation of
-      S.Get -> Right (get selector =<< v)
-      S.Delete -> Right (delete selector <$> v)
+      S.Get -> concat <$> traverse (get ctx selector) v
+      S.Delete -> traverse (delete ctx selector) v
       S.Set ex ->
-        evaluate ctx ex >>= asSingle >>= \x -> traverse (tmap selector (Right . const x)) v
-      S.SetAs var ex -> traverse (tmap selector (\x -> evaluate (M.insert var (JSON x) ctx) ex >>= asSingle)) v
+        evaluate ctx ex >>= asSingle >>= \x -> traverse (tmap ctx selector (Right . const x)) v
+      S.SetAs var ex ->
+        traverse (tmap ctx selector (\x -> evaluate (M.insert var (JSON x) ctx) ex >>= asSingle)) v
       S.PlusEq ex ->
-        evaluate ctx ex >>= asSingle >>= asNumber >>= \x -> traverse (tmap selector (Right . numOp (+ x))) v
+        evaluate ctx ex >>= asSingle >>= asNumber >>= \x -> traverse (tmap ctx selector (Right . numOp (+ x))) v
       S.MinusEq ex ->
-        evaluate ctx ex >>= asSingle >>= asNumber >>= \x -> traverse (tmap selector (Right . numOp (subtract x))) v
+        evaluate ctx ex >>= asSingle >>= asNumber >>= \x -> traverse (tmap ctx selector (Right . numOp (subtract x))) v
       S.TimesEq ex ->
-        evaluate ctx ex >>= asSingle >>= asNumber >>= \x -> traverse (tmap selector (Right . numOp (* x))) v
+        evaluate ctx ex >>= asSingle >>= asNumber >>= \x -> traverse (tmap ctx selector (Right . numOp (* x))) v
       S.DivEq ex ->
-        evaluate ctx ex >>= asSingle >>= asNumber >>= \x -> traverse (tmap selector (Right . numOp (/ x))) v
+        evaluate ctx ex >>= asSingle >>= asNumber >>= \x -> traverse (tmap ctx selector (Right . numOp (/ x))) v
       S.ConcatEq ex ->
-        evaluate ctx ex >>= asSingle >>= asString >>= \x -> traverse (tmap selector (Right . stringOp (<> x))) v
+        evaluate ctx ex >>= asSingle >>= asString >>= \x -> traverse (tmap ctx selector (Right . stringOp (<> x))) v
+
+evaluateFilter :: Context -> S.Filter -> J.Value -> Either String Bool
+evaluateFilter ctx (S.Filter var expr) v =
+  asBool =<< asSingle =<< evaluate (M.insert var (JSON v) ctx) expr
+
+evaluateMaybeFilter :: Context -> Maybe S.Filter -> J.Value -> Either String Bool
+evaluateMaybeFilter ctx mf v = case mf of
+  Nothing -> Right True
+  Just f -> evaluateFilter ctx f v
 
 asSingle :: [J.Value] -> Either String J.Value
 asSingle [x] = Right x

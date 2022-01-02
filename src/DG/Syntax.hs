@@ -25,9 +25,11 @@ data Expr
 
 data Selector
   = Field Identifier
-  | Slice Slice
+  | Slice Slice (Maybe Filter)
   | Compose Selector Selector
   deriving (Eq, Show)
+
+data Filter = Filter Identifier Expr deriving (Eq, Show)
 
 data Slice
   = Index Int

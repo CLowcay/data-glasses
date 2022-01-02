@@ -84,6 +84,18 @@ dot = () <$ lexeme "."
 colon :: Parser ()
 colon = () <$ lexeme ":"
 
+as :: Parser ()
+as = () <$ lexeme "as"
+
+eq :: Parser ()
+eq = () <$ lexeme "="
+
+delete :: Parser ()
+delete = () <$ lexeme "delete"
+
+whereP :: Parser ()
+whereP = () <$ lexeme "where"
+
 selector :: Parser S.Selector
 selector = do
   s1 <- singleSelector
@@ -91,8 +103,8 @@ selector = do
   where
     singleSelector =
       choice
-        [ S.Field <$> try identifier,
-          S.Slice <$> try (brackets slice)
+        [ brackets (S.Slice <$> slice <*> optional whereExpr),
+          S.Field <$> identifier
         ]
 
 slice :: Parser S.Slice
@@ -105,6 +117,9 @@ slice = do
         Just index -> pure (S.Index index)
     ]
 
+whereExpr :: Parser S.Filter
+whereExpr = S.Filter <$> (as *> identifier) <*> (whereP *> expression)
+
 brackets :: Parser a -> Parser a
 brackets = between (lexeme "[") (lexeme "]")
 
@@ -114,9 +129,9 @@ parentheses = between (lexeme "(") (lexeme ")")
 operation :: Parser S.Operation
 operation =
   choice
-    [ S.Delete <$ try (lexeme "=" <* lexeme "delete"),
-      S.Set <$> (lexeme "=" *> expression),
-      S.SetAs <$> (lexeme "as" *> identifier <* lexeme "=") <*> expression,
+    [ S.Delete <$ try (eq <* delete),
+      S.Set <$> (eq *> expression),
+      S.SetAs <$> (as *> identifier <* eq) <*> expression,
       S.PlusEq <$> (lexeme "+=" *> expression),
       S.MinusEq <$> (lexeme "-=" *> expression),
       S.TimesEq <$> (lexeme "*=" *> expression),
