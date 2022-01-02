@@ -1,10 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+
+{-# HLINT ignore "Redundant bracket" #-}
 
 module MainSpec where
 
 import DG.Interpreter (evaluate, initialContext)
 import DG.Parser (expression)
-import DG.Runtime (Value (..))
+import DG.Runtime (Value (..), asJSON)
 import qualified DG.Syntax as S
 import qualified Data.Aeson as J
 import qualified Data.Map as M
@@ -21,7 +24,10 @@ example expr input expected = do
   case runParser (expression <* eof) "expression" expr of
     Left errors -> Left (errorBundlePretty errors) `shouldBe` expected
     Right program ->
-      evaluate (M.insert (S.Identifier "x") (JSON input) initialContext) program `shouldBe` expected
+      (evaluate (M.insert (S.Identifier "x") (JSON input) initialContext) program >>= traverse asJSON) `shouldBe` expected
+
+evaluatesTo :: Text -> J.Value -> Spec
+evaluatesTo expr expected = specify (show expr ++ " is " ++ show expected) $ example expr J.Null (Right [expected])
 
 spec :: Spec
 spec = parallel $ do
@@ -62,9 +68,7 @@ spec = parallel $ do
       example "x.a = delete" (J.object [("a", J.String "xyz"), ("b", J.Number 123)]) (Right [J.object [("b", J.Number 123)]])
     specify "x.a.b = delete in {a:{b: 'xyz', c:null}, b:123} is {a:{c:null}, b:123}" $
       example "x.a.b = delete" (J.object [("a", J.object [("b", J.String "xyz"), ("c", J.Null)]), ("b", J.Number 123)]) (Right [J.object [("a", J.object [("c", J.Null)]), ("b", J.Number 123)]])
-  describe "boolean expressions" $ do
-    specify "!(true or false) == !true and !false" $
-      example "!(true or false) == !true and !false" J.Null (Right [J.Bool True])
-  describe "lambda expressions" $ do
-    specify "(as x in x + 1)(1) is 2" $
-      example "(as x in x + 1)(1)" J.Null (Right [J.Number 2])
+  describe "expressions" $ do
+    "(as x in x + 1)(1)" `evaluatesTo` (J.Number 2)
+    "(as x in (as y in x + y))(1)(2)" `evaluatesTo` (J.Number 3)
+    "!(true or false) == !true and !false" `evaluatesTo` J.Bool True

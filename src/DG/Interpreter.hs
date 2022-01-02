@@ -4,7 +4,7 @@ module DG.Interpreter (evaluate, initialContext) where
 
 import Control.Monad (filterM, join, (<=<))
 import DG.BuiltinFunctions (isArray, isBool, isNull, isNumber, isObject, isString)
-import DG.Runtime (Function, Value (..))
+import DG.Runtime (Value (..), asFunction, asJSON)
 import qualified DG.Syntax as S
 import qualified Data.Aeson as J
 import Data.Bifunctor (second)
@@ -12,7 +12,6 @@ import Data.Foldable (toList)
 import Data.Functor ((<&>))
 import Data.HashMap.Lazy ((!?))
 import qualified Data.HashMap.Strict as HM
-import Data.List (intercalate)
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
@@ -32,12 +31,6 @@ initialContext =
 
 lookupCtx :: Context -> S.Identifier -> Either String Value
 lookupCtx ctx var = maybe (Left ("Undefined variable " ++ show var)) Right (M.lookup var ctx)
-
-lookupValue :: Context -> S.Identifier -> Either String J.Value
-lookupValue ctx var = lookupCtx ctx var >>= \case JSON v -> pure v; v -> Left ("Expected JSON value for " ++ show var ++ " but found " ++ show v)
-
-lookupFunction :: Context -> S.Identifier -> Either String Function
-lookupFunction ctx var = lookupCtx ctx var >>= \case Function v -> pure v; _ -> Left (show var ++ " is not a function")
 
 get :: Context -> S.Selector -> J.Value -> Either String [J.Value]
 get ctx s v = case s of
@@ -115,54 +108,46 @@ tmap ctx s f v = case s of
     _ -> pure v
   S.Compose s1 s2 -> tmap ctx s1 (tmap ctx s2 f) v
 
-evaluateFunction :: Context -> S.Expr -> Either String Function
-evaluateFunction ctx e = case e of
-  S.Variable var -> lookupFunction ctx var
-  S.Abstraction params expr -> Right $ \args ->
-    if length args /= length params
-      then Left ("Expected " ++ show (length params) ++ " arguments, found " ++ show (length args))
-      else JSON <$> (asSingle =<< evaluate (M.fromList (params `zip` args) `M.union` ctx) expr)
-  _ -> Left ("Not a function '" ++ show e ++ "'")
-
-evaluate :: Context -> S.Expr -> Either String [J.Value]
+evaluate :: Context -> S.Expr -> Either String [Value]
 evaluate ctx e = case e of
-  S.Variable var -> pure <$> lookupValue ctx var
-  S.StringLit text -> Right [J.String text]
-  S.NumLit n -> Right [J.Number (fromIntegral n)]
-  S.NullLit -> Right [J.Null]
-  S.BoolLit b -> Right [J.Bool b]
-  S.Array as -> pure . J.Array . V.fromList . join <$> traverse (evaluate ctx) as
+  S.Variable var -> pure <$> lookupCtx ctx var
+  S.StringLit text -> Right [JSON (J.String text)]
+  S.NumLit n -> Right [JSON (J.Number (fromIntegral n))]
+  S.NullLit -> Right [JSON J.Null]
+  S.BoolLit b -> Right [JSON (J.Bool b)]
+  S.Array as -> pure . JSON . J.Array . V.fromList . join <$> traverse (traverse asJSON <=< evaluate ctx) as
   S.Binop op lExpr rExpr -> do
     l <- asSingle =<< evaluate ctx lExpr
     r <- asSingle =<< evaluate ctx rExpr
     pure <$> applyOp op l r
   S.Unop op expr -> pure <$> (evaluate ctx expr >>= asSingle >>= applyUnop op)
   S.Apply fExpr pExprs -> do
-    f <- evaluateFunction ctx fExpr
+    f <- asFunction =<< asSingle =<< evaluate ctx fExpr
     parameters <- traverse (asSingle <=< evaluate ctx) pExprs
-    f (JSON <$> parameters) >>= \case
-      JSON v -> Right [v]
-      Function _ -> Left "Expected a value, found <function>"
-  S.Abstraction params expr -> Left ("Expected a value, found 'as " ++ intercalate ", " (show <$> params) ++ " in " ++ show expr ++ "'")
+    pure <$> f parameters
+  S.Abstraction params expr -> Right . pure . Function $ \args ->
+    if length args /= length params
+      then Left ("Expected " ++ show (length params) ++ " arguments, found " ++ show (length args))
+      else asSingle =<< evaluate (M.fromList (params `zip` args) `M.union` ctx) expr
   S.Selection expr selector operation -> do
-    v <- evaluate ctx expr
+    v <- traverse asJSON =<< evaluate ctx expr
     case operation of
-      S.Get -> concat <$> traverse (get ctx selector) v
-      S.Delete -> traverse (delete ctx selector) v
+      S.Get -> fmap JSON . concat <$> traverse (get ctx selector) v
+      S.Delete -> traverse (fmap JSON . delete ctx selector) v
       S.Set ex ->
-        evaluate ctx ex >>= asSingle >>= \x -> traverse (tmap ctx selector (Right . const x)) v
+        evaluate ctx ex >>= asSingle >>= asJSON >>= \x -> traverse (fmap JSON . tmap ctx selector (Right . const x)) v
       S.SetAs var ex ->
-        traverse (tmap ctx selector (\x -> evaluate (M.insert var (JSON x) ctx) ex >>= asSingle)) v
+        traverse (fmap JSON . tmap ctx selector (\x -> evaluate (M.insert var (JSON x) ctx) ex >>= asSingle >>= asJSON)) v
       S.PlusEq ex ->
-        evaluate ctx ex >>= asSingle >>= asNumber >>= \x -> traverse (tmap ctx selector (Right . numOp (+ x))) v
+        evaluate ctx ex >>= asSingle >>= asNumber >>= \x -> traverse (fmap JSON . tmap ctx selector (Right . numOp (+ x))) v
       S.MinusEq ex ->
-        evaluate ctx ex >>= asSingle >>= asNumber >>= \x -> traverse (tmap ctx selector (Right . numOp (subtract x))) v
+        evaluate ctx ex >>= asSingle >>= asNumber >>= \x -> traverse (fmap JSON . tmap ctx selector (Right . numOp (subtract x))) v
       S.TimesEq ex ->
-        evaluate ctx ex >>= asSingle >>= asNumber >>= \x -> traverse (tmap ctx selector (Right . numOp (* x))) v
+        evaluate ctx ex >>= asSingle >>= asNumber >>= \x -> traverse (fmap JSON . tmap ctx selector (Right . numOp (* x))) v
       S.DivEq ex ->
-        evaluate ctx ex >>= asSingle >>= asNumber >>= \x -> traverse (tmap ctx selector (Right . numOp (/ x))) v
+        evaluate ctx ex >>= asSingle >>= asNumber >>= \x -> traverse (fmap JSON . tmap ctx selector (Right . numOp (/ x))) v
       S.ConcatEq ex ->
-        evaluate ctx ex >>= asSingle >>= asString >>= \x -> traverse (tmap ctx selector (Right . stringOp (<> x))) v
+        evaluate ctx ex >>= asSingle >>= asString >>= \x -> traverse (fmap JSON . tmap ctx selector (Right . stringOp (<> x))) v
 
 evaluateFilter :: Context -> S.Filter -> J.Value -> Either String Bool
 evaluateFilter ctx (S.Filter var expr) v =
@@ -173,60 +158,63 @@ evaluateMaybeFilter ctx mf v = case mf of
   Nothing -> Right True
   Just f -> evaluateFilter ctx f v
 
-asSingle :: [J.Value] -> Either String J.Value
+asSingle :: Show a => [a] -> Either String a
 asSingle [x] = Right x
 asSingle xs = Left ("Expected one result, found " ++ show xs)
 
-asNumber :: J.Value -> Either String Scientific
+asNumber :: Value -> Either String Scientific
 asNumber v = case v of
-  J.Number n -> Right n
+  JSON (J.Number n) -> Right n
   _ -> Left ("Expected a number, found " ++ show v)
 
-asBool :: J.Value -> Either String Bool
+asBool :: Value -> Either String Bool
 asBool v = case v of
-  J.Bool n -> Right n
+  JSON (J.Bool n) -> Right n
   _ -> Left ("Expected true or false, found " ++ show v)
 
-asString :: J.Value -> Either String Text
+asString :: Value -> Either String Text
 asString v = case v of
-  J.String n -> Right n
+  JSON (J.String n) -> Right n
   _ -> Left ("Expected a string, found " ++ show v)
 
 numOp :: (Scientific -> Scientific) -> J.Value -> J.Value
 numOp f = \case
-  J.Number n -> J.Number (f n)
+  (J.Number n) -> (J.Number (f n))
   v -> v
 
 stringOp :: (Text -> Text) -> J.Value -> J.Value
 stringOp f = \case
-  J.String n -> J.String (f n)
+  (J.String n) -> (J.String (f n))
   v -> v
 
-numBinop :: (Scientific -> Scientific -> Scientific) -> J.Value -> J.Value -> Either String J.Value
-numBinop f l r = J.Number <$> (f <$> asNumber l <*> asNumber r)
+numBinop :: (Scientific -> Scientific -> Scientific) -> Value -> Value -> Either String Value
+numBinop f l r = JSON . J.Number <$> (f <$> asNumber l <*> asNumber r)
 
-boolBinop :: (Bool -> Bool -> Bool) -> J.Value -> J.Value -> Either String J.Value
-boolBinop f l r = J.Bool <$> (f <$> asBool l <*> asBool r)
+cmpOp :: (J.Value -> J.Value -> Bool) -> Value -> Value -> Either String Value
+cmpOp f l r = JSON . J.Bool <$> (f <$> asJSON l <*> asJSON r)
 
-stringBinop :: (Text -> Text -> Text) -> J.Value -> J.Value -> Either String J.Value
-stringBinop f l r = J.String <$> (f <$> asString l <*> asString r)
+boolBinop :: (Bool -> Bool -> Bool) -> Value -> Value -> Either String Value
+boolBinop f l r = JSON . J.Bool <$> (f <$> asBool l <*> asBool r)
 
-applyOp :: S.Binop -> J.Value -> J.Value -> Either String J.Value
+stringBinop :: (Text -> Text -> Text) -> Value -> Value -> Either String Value
+stringBinop f l r = JSON . J.String <$> (f <$> asString l <*> asString r)
+
+applyOp :: S.Binop -> Value -> Value -> Either String Value
 applyOp op l r = case op of
   S.Plus -> numBinop (+) l r
   S.Minus -> numBinop (-) l r
   S.Times -> numBinop (*) l r
   S.Divide -> numBinop (/) l r
-  S.Eq -> pure (J.Bool (l == r))
-  S.Neq -> pure (J.Bool (l /= r))
-  S.Gt -> pure (J.Bool (l > r))
-  S.Lt -> pure (J.Bool (l < r))
-  S.Gte -> pure (J.Bool (l >= r))
-  S.Lte -> pure (J.Bool (l <= r))
+  S.Eq -> cmpOp (==) l r
+  S.Neq -> cmpOp (/=) l r
+  S.Gt -> cmpOp (>) l r
+  S.Lt -> cmpOp (<) l r
+  S.Gte -> cmpOp (>=) l r
+  S.Lte -> cmpOp (<=) l r
   S.And -> boolBinop (&&) l r
   S.Or -> boolBinop (||) l r
   S.Concat -> stringBinop (<>) l r
 
-applyUnop :: S.Unop -> J.Value -> Either String J.Value
+applyUnop :: S.Unop -> Value -> Either String Value
 applyUnop op x = case op of
-  S.Not -> J.Bool . not <$> asBool x
+  S.Not -> JSON . J.Bool . not <$> asBool x

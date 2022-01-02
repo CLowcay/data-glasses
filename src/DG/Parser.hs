@@ -5,6 +5,7 @@ module DG.Parser (expression) where
 import Control.Applicative (optional, (<|>))
 import Control.Monad.Combinators.Expr (Operator (..), makeExprParser)
 import qualified DG.Syntax as S
+import Data.List (foldl')
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -74,10 +75,8 @@ term = do
         S.Selection value <$> selector
           <*> (fromMaybe S.Get <$> optional operation)
 
-  mParameters <- optional (parentheses (expression `sepBy` comma))
-  case mParameters of
-    Nothing -> pure (fromMaybe value selection)
-    Just parameters -> pure (S.Apply (fromMaybe value selection) parameters)
+  applications <- many (parentheses (expression `sepBy` comma))
+  pure (foldl' S.Apply (fromMaybe value selection) applications)
 
 dot :: Parser ()
 dot = () <$ lexeme "."
