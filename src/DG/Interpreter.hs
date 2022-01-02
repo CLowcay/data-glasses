@@ -12,6 +12,7 @@ import Data.Foldable (toList)
 import Data.Functor ((<&>))
 import Data.HashMap.Lazy ((!?))
 import qualified Data.HashMap.Strict as HM
+import Data.List (intercalate)
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
@@ -117,6 +118,10 @@ tmap ctx s f v = case s of
 evaluateFunction :: Context -> S.Expr -> Either String Function
 evaluateFunction ctx e = case e of
   S.Variable var -> lookupFunction ctx var
+  S.Abstraction params expr -> Right $ \args ->
+    if length args /= length params
+      then Left ("Expected " ++ show (length params) ++ " arguments, found " ++ show (length args))
+      else JSON <$> (asSingle =<< evaluate (M.fromList (params `zip` args) `M.union` ctx) expr)
   _ -> Left ("Not a function '" ++ show e ++ "'")
 
 evaluate :: Context -> S.Expr -> Either String [J.Value]
@@ -138,6 +143,7 @@ evaluate ctx e = case e of
     f (JSON <$> parameters) >>= \case
       JSON v -> Right [v]
       Function _ -> Left "Expected a value, found <function>"
+  S.Abstraction params expr -> Left ("Expected a value, found 'as " ++ intercalate ", " (show <$> params) ++ " in " ++ show expr ++ "'")
   S.Selection expr selector operation -> do
     v <- evaluate ctx expr
     case operation of

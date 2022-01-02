@@ -1,7 +1,17 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
-module DG.Syntax where
+module DG.Syntax
+  ( Identifier (..),
+    Expr (..),
+    Selector (..),
+    Operation (..),
+    Slice (..),
+    Filter (..),
+    Unop (..),
+    Binop (..),
+  )
+where
 
 import Data.Hashable (Hashable)
 import Data.Text (Text)
@@ -21,6 +31,7 @@ data Expr
   | Unop Unop Expr
   | Binop Binop Expr Expr
   | Apply Expr [Expr]
+  | Abstraction [Identifier] Expr
   deriving (Eq, Show)
 
 data Selector

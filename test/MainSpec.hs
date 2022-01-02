@@ -65,3 +65,6 @@ spec = parallel $ do
   describe "boolean expressions" $ do
     specify "!(true or false) == !true and !false" $
       example "!(true or false) == !true and !false" J.Null (Right [J.Bool True])
+  describe "lambda expressions" $ do
+    specify "(as x in x + 1)(1) is 2" $
+      example "(as x in x + 1)(1)" J.Null (Right [J.Number 2])

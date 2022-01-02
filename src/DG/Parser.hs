@@ -59,6 +59,7 @@ term = do
   value <-
     choice
       [ parentheses expression,
+        S.Abstraction <$> (as *> (identifier `sepBy` comma)) <*> (inP *> expression),
         S.Array <$> try (brackets (expression `sepBy` comma)),
         S.NumLit <$> try number,
         S.StringLit <$> try string,
@@ -95,6 +96,9 @@ delete = () <$ lexeme "delete"
 
 whereP :: Parser ()
 whereP = () <$ lexeme "where"
+
+inP :: Parser ()
+inP = () <$ lexeme "in"
 
 selector :: Parser S.Selector
 selector = do
