@@ -41,7 +41,7 @@ data Selector
   deriving (Eq, Show)
 
 data Slice
-  = Index Int
+  = Index Expr
   | Range (Maybe Int) (Maybe Int) (Maybe Int)
   deriving (Eq, Show)
 

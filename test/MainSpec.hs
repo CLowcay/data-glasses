@@ -1,7 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-
-{-# HLINT ignore "Redundant bracket" #-}
+{-# LANGUAGE TypeApplications #-}
 
 module MainSpec where
 
@@ -20,7 +18,7 @@ main :: IO ()
 main = hspec spec
 
 example :: Text -> J.Value -> Either String [J.Value] -> IO ()
-example expr input expected = do
+example expr input expected =
   case runParser (expression <* eof) "expression" expr of
     Left errors -> Left (errorBundlePretty errors) `shouldBe` expected
     Right program ->
@@ -34,19 +32,25 @@ spec = parallel $ do
   describe "get" $ do
     specify "x.a in {a:123} is 123" $
       example "x.a" (J.object [("a", J.Number 123)]) (Right [J.Number 123])
-    specify "x.a.b in {a:{b:123}} is 123" $ do
+    specify "x.a.b in {a:{b:123}} is 123" $
       example "x.a.b" (J.object [("a", J.object [("b", J.Number 123)])]) (Right [J.Number 123])
-    specify "x.a.z in {a:{b:123}} is empty" $ do
+    specify "x.a.z in {a:{b:123}} is empty" $
       example "x.a.z" (J.object [("a", J.object [("b", J.Number 123)])]) (Right [])
-    specify "x.a.b.c.d.e in {a:123} is empty" $ do
+    specify "x.a.b.c.d.e in {a:123} is empty" $
       example "x.a.b.d.e" (J.object [("a", J.Number 123)]) (Right [])
-    specify "[1,2,3]" $ do
+    specify "[1,2,3]" $
       example "[1,2,3]" J.Null (Right [J.Array (V.fromList (J.Number <$> [1, 2, 3]))])
-    specify "x.b = [a.a.[:]] in {a:[1,2], b:null}" $ do
+    specify "x.b = [a.a.[*]] in {a:[1,2], b:null}" $
       example
-        "x.b = [\"a\", x.a.[:]]"
+        "x.b = [\"a\", x.a.[*]]"
         (J.object [("a", J.Array (V.fromList (J.Number <$> [1, 2]))), ("b", J.Null)])
         (Right [J.object [("b", J.Array (V.fromList [J.String "a", J.Number 1, J.Number 2])), ("a", J.Array (V.fromList (J.Number <$> [1, 2])))]])
+    specify "x.[3:5] in [0,1,2,3,4,5,6,7,8,9]" $
+      example "x.[3:5]" (J.Array (V.fromList (J.Number . fromIntegral @Int <$> [0 .. 9]))) (Right (J.Number <$> [3, 4]))
+    specify "x.[7:] in [0,1,2,3,4,5,6,7,8,9]" $
+      example "x.[7:]" (J.Array (V.fromList (J.Number . fromIntegral @Int <$> [0 .. 9]))) (Right (J.Number <$> [7, 8, 9]))
+    specify "x.[:3] in [0,1,2,3,4,5,6,7,8,9]" $
+      example "x.[:3]" (J.Array (V.fromList (J.Number . fromIntegral @Int <$> [0 .. 9]))) (Right (J.Number <$> [0, 1, 2]))
   describe "set" $ do
     specify "x.a = 'xyz' in {a:null} is {a:'xyz'}" $
       example "x.a = \"xyz\"" (J.object [("a", J.Null)]) (Right [J.object [("a", J.String "xyz")]])
@@ -69,6 +73,6 @@ spec = parallel $ do
     specify "x.a.b = delete in {a:{b: 'xyz', c:null}, b:123} is {a:{c:null}, b:123}" $
       example "x.a.b = delete" (J.object [("a", J.object [("b", J.String "xyz"), ("c", J.Null)]), ("b", J.Number 123)]) (Right [J.object [("a", J.object [("c", J.Null)]), ("b", J.Number 123)]])
   describe "expressions" $ do
-    "(as x in x + 1)(1)" `evaluatesTo` (J.Number 2)
-    "(as x in (as y in x + y))(1)(2)" `evaluatesTo` (J.Number 3)
+    "(as x in x + 1)(1)" `evaluatesTo` J.Number 2
+    "(as x in (as y in x + y))(1)(2)" `evaluatesTo` J.Number 3
     "!(true or false) == !true and !false" `evaluatesTo` J.Bool True

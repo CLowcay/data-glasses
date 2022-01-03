@@ -5,7 +5,7 @@
 
 module DG.Interpreter (evaluate, initialContext) where
 
-import Control.Monad (join, (<=<))
+import Control.Monad (join, (<=<), (>=>))
 import DG.BuiltinFunctions (isArray, isBool, isNull, isNumber, isObject, isString)
 import DG.Runtime (JSONF (..), Value (..), asFunction, asJSON, fromJSONM, toJSONM)
 import qualified DG.Syntax as S
@@ -18,7 +18,7 @@ import qualified Data.HashMap.Strict as HM
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe, mapMaybe)
-import Data.Scientific (Scientific)
+import Data.Scientific (Scientific, toBoundedInteger)
 import Data.Text (Text)
 import Data.Vector ((!), (//))
 import qualified Data.Vector as V
@@ -43,7 +43,9 @@ get ctx s v = case s of
   S.Slice slice -> case v of
     J.Array a ->
       case slice of
-        S.Index i -> Right [a ! i | i >= 0 && i < V.length a]
+        S.Index expr ->
+          evaluate ctx expr >>= asSingle >>= asInt
+            <&> \i -> [a ! i | i >= 0 && i < V.length a]
         S.Range from to _ ->
           let efrom = fromMaybe 0 from
               rlen = fromMaybe (V.length a) to - efrom
@@ -74,10 +76,11 @@ tmapM ctx s f v = case s of
     Just <$> case v of
       Array a ->
         case slice of
-          S.Index i ->
-            if i >= 0 && i < V.length a
-              then (\case Nothing -> pure Nothing; Just x -> f x) (a ! i) <&> \vi -> Array (a // [(i, vi)])
-              else pure v
+          S.Index expr ->
+            evaluate ctx expr >>= asSingle >>= asInt >>= \i ->
+              if i >= 0 && i < V.length a
+                then (\case Nothing -> pure Nothing; Just x -> f x) (a ! i) <&> \vi -> Array (a // [(i, vi)])
+                else pure v
           S.Range from to _ ->
             let inRange i = maybe True (i >=) from && maybe True (i <) to
                 mapElement i = \case Just x -> if inRange i then f x else pure (Just x); Nothing -> pure Nothing
@@ -141,6 +144,9 @@ asNumber :: Value -> Either String Scientific
 asNumber v = case v of
   JSON (J.Number n) -> Right n
   _ -> Left ("Expected a number, found " ++ show v)
+
+asInt :: Value -> Either String Int
+asInt = asNumber >=> (maybe (Left "Index out of range") pure . toBoundedInteger)
 
 asBool :: Value -> Either String Bool
 asBool v = case v of

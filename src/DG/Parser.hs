@@ -84,6 +84,9 @@ dot = () <$ lexeme "."
 colon :: Parser ()
 colon = () <$ lexeme ":"
 
+star :: Parser ()
+star = () <$ lexeme "*"
+
 as :: Parser ()
 as = () <$ lexeme "as"
 
@@ -112,13 +115,12 @@ selector = do
         ]
 
 slice :: Parser S.Slice
-slice = do
-  from <- optional number
+slice =
   choice
-    [ try (S.Range from <$> (colon *> optional number) <*> optional (colon *> number)),
-      case from of
-        Nothing -> fail "Expected an index or range"
-        Just index -> pure (S.Index index)
+    [ S.Range Nothing Nothing Nothing <$ star,
+      S.Range Nothing <$> (Just <$> (colon *> number)) <*> optional (colon *> number),
+      try (S.Range <$> (Just <$> number) <*> (colon *> optional number) <*> optional (colon *> number)),
+      S.Index <$> expression
     ]
 
 brackets :: Parser a -> Parser a
