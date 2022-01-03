@@ -1,11 +1,9 @@
 {-# LANGUAGE LambdaCase #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-
-{-# HLINT ignore "Redundant bracket" #-}
+{-# LANGUAGE TupleSections #-}
 
 module DG.Interpreter (evaluate, initialContext) where
 
-import Control.Monad (join, (<=<), (>=>))
+import Control.Monad (foldM, join, (<=<), (>=>))
 import DG.BuiltinFunctions (isArray, isBool, isNull, isNumber, isObject, isString)
 import DG.Runtime (JSONF (..), Value (..), asFunction, asJSON, fromJSONM, toJSONM)
 import qualified DG.Syntax as S
@@ -17,7 +15,7 @@ import Data.HashMap.Lazy ((!?))
 import qualified Data.HashMap.Strict as HM
 import Data.Map (Map)
 import qualified Data.Map as M
-import Data.Maybe (fromMaybe, mapMaybe)
+import Data.Maybe (fromMaybe, isNothing, mapMaybe)
 import Data.Scientific (Scientific, toBoundedInteger)
 import Data.Text (Text)
 import Data.Vector ((!), (//))
@@ -42,24 +40,26 @@ get ctx s v = case s of
     _ -> pure []
   S.Slice slice ->
     case slice of
-      S.Index expr -> case v of
-        J.Array a ->
-          evaluate ctx expr >>= asSingle >>= asInt
-            <&> (\i -> [a ! i | i >= 0 && i < V.length a])
-        _ -> pure []
+      S.Index expr -> do
+        ixs <- evaluate ctx expr
+        case v of
+          J.Array a -> mapMaybe (a V.!?) <$> traverse asInt ixs
+          J.Object o -> mapMaybe (o !?) <$> traverse asString ixs
+          _ -> pure []
       S.Range from to _ ->
         case v of
           J.Array a ->
             let efrom = fromMaybe 0 from
                 rlen = fromMaybe (V.length a) to - efrom
              in Right (V.toList (V.slice efrom rlen a))
+          J.Object o | isNothing from && isNothing to -> Right (HM.elems o)
           _ -> pure []
   S.Where fexpr -> evaluateFilter ctx fexpr v <&> \passed -> [v | passed]
   S.Compose s1 s2 -> do
     r1s <- get ctx s1 v
     concat <$> traverse (get ctx s2) r1s
 
-tmap :: Context -> S.Selector -> (J.Value -> Either String (J.Value)) -> [J.Value] -> Either String [Value]
+tmap :: Context -> S.Selector -> (J.Value -> Either String J.Value) -> [J.Value] -> Either String [Value]
 tmap ctx s f v = mapMaybe (fmap (JSON . fromJSONM)) <$> traverse (tmapM ctx s (fmap (Just . toJSONM) . f . fromJSONM)) (toJSONM <$> v)
 
 tmapM ::
@@ -71,19 +71,17 @@ tmapM ::
 tmapM ctx s f v = case s of
   S.Field (S.Identifier name) ->
     Just <$> case v of
-      Object o -> case o !? name of
-        Just (Just vk) -> f vk <&> \v' -> Object (HM.insert name v' o)
-        _ -> pure (Object o)
+      Object o -> Object <$> updateObject o name
       _ -> pure v
   S.Slice slice ->
     Just <$> case slice of
-      S.Index expr ->
+      S.Index expr -> do
+        ixs <- evaluate ctx expr
         case v of
-          Array a ->
-            evaluate ctx expr >>= asSingle >>= asInt >>= \i ->
-              if i >= 0 && i < V.length a
-                then (\case Nothing -> pure Nothing; Just x -> f x) (a ! i) <&> \vi -> Array (a // [(i, vi)])
-                else pure v
+          Array a -> do
+            is <- filter (\i -> i >= 0 && i < V.length a) <$> traverse asInt ixs
+            Array . (a //) <$> traverse (\i -> (i,) <$> maybe (pure Nothing) f (a ! i)) is
+          Object o -> Object <$> (foldM updateObject o =<< traverse asString ixs)
           _ -> pure v
       S.Range from to _ ->
         case v of
@@ -91,11 +89,16 @@ tmapM ctx s f v = case s of
             let inRange i = maybe True (i >=) from && maybe True (i <) to
                 mapElement i = \case Just x -> if inRange i then f x else pure (Just x); Nothing -> pure Nothing
              in Array <$> V.imapM mapElement a
+          Object o | isNothing from && isNothing to -> Object <$> foldM updateObject o (HM.keys o)
           _ -> pure v
   S.Where fexpr ->
     evaluateFilter ctx fexpr (fromJSONM v)
       >>= \passed -> if passed then f v else pure (Just v)
   S.Compose s1 s2 -> tmapM ctx s1 (tmapM ctx s2 f) v
+  where
+    updateObject obj name = case obj !? name of
+      Just (Just vOld) -> f vOld <&> \v' -> HM.insert name v' obj
+      _ -> pure obj
 
 evaluate :: Context -> S.Expr -> Either String [Value]
 evaluate ctx e = case e of
@@ -129,15 +132,15 @@ evaluate ctx e = case e of
       S.SetAs var ex ->
         tmap ctx selector (\x -> evaluate (M.insert var (JSON x) ctx) ex >>= asSingle >>= asJSON) v
       S.PlusEq ex ->
-        evaluate ctx ex >>= asSingle >>= asNumber >>= \x -> (tmap ctx selector (Right . numOp (+ x))) v
+        evaluate ctx ex >>= asSingle >>= asNumber >>= \x -> tmap ctx selector (Right . numOp (+ x)) v
       S.MinusEq ex ->
-        evaluate ctx ex >>= asSingle >>= asNumber >>= \x -> (tmap ctx selector (Right . numOp (subtract x))) v
+        evaluate ctx ex >>= asSingle >>= asNumber >>= \x -> tmap ctx selector (Right . numOp (subtract x)) v
       S.TimesEq ex ->
-        evaluate ctx ex >>= asSingle >>= asNumber >>= \x -> (tmap ctx selector (Right . numOp (* x))) v
+        evaluate ctx ex >>= asSingle >>= asNumber >>= \x -> tmap ctx selector (Right . numOp (* x)) v
       S.DivEq ex ->
-        evaluate ctx ex >>= asSingle >>= asNumber >>= \x -> (tmap ctx selector (Right . numOp (/ x))) v
+        evaluate ctx ex >>= asSingle >>= asNumber >>= \x -> tmap ctx selector (Right . numOp (/ x)) v
       S.ConcatEq ex ->
-        evaluate ctx ex >>= asSingle >>= asString >>= \x -> (tmap ctx selector (Right . stringOp (<> x))) v
+        evaluate ctx ex >>= asSingle >>= asString >>= \x -> tmap ctx selector (Right . stringOp (<> x)) v
 
 evaluateFilter :: Context -> S.Expr -> J.Value -> Either String Bool
 evaluateFilter ctx expr v = evaluate ctx expr >>= asSingle >>= asFunction >>= ($ [JSON v]) >>= asBool
@@ -152,7 +155,7 @@ asNumber v = case v of
   _ -> Left ("Expected a number, found " ++ show v)
 
 asInt :: Value -> Either String Int
-asInt = asNumber >=> (maybe (Left "Index out of range") pure . toBoundedInteger)
+asInt = asNumber >=> maybe (Left "Index out of range") pure . toBoundedInteger
 
 asBool :: Value -> Either String Bool
 asBool v = case v of
@@ -185,9 +188,9 @@ boolBinop f l r = case (l, r) of
   (Function fl, Function fr) -> Right . Function $ \a ->
     JSON . J.Bool <$> (f <$> (asBool =<< fl a) <*> (asBool =<< fr a))
   (Function fl, JSON _) -> Right . Function $ \a ->
-    JSON . J.Bool <$> (f <$> (asBool =<< fl a) <*> (asBool r))
+    JSON . J.Bool <$> (f <$> (asBool =<< fl a) <*> asBool r)
   (JSON _, Function fr) -> Right . Function $ \a ->
-    JSON . J.Bool <$> (f <$> (asBool l) <*> (asBool =<< fr a))
+    JSON . J.Bool <$> (f <$> asBool l <*> (asBool =<< fr a))
   (JSON _, JSON _) -> JSON . J.Bool <$> (f <$> asBool l <*> asBool r)
 
 stringBinop :: (Text -> Text -> Text) -> Value -> Value -> Either String Value
