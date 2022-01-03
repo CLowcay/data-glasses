@@ -169,7 +169,14 @@ cmpOp :: (J.Value -> J.Value -> Bool) -> Value -> Value -> Either String Value
 cmpOp f l r = JSON . J.Bool <$> (f <$> asJSON l <*> asJSON r)
 
 boolBinop :: (Bool -> Bool -> Bool) -> Value -> Value -> Either String Value
-boolBinop f l r = JSON . J.Bool <$> (f <$> asBool l <*> asBool r)
+boolBinop f l r = case (l, r) of
+  (Function fl, Function fr) -> Right . Function $ \a ->
+    JSON . J.Bool <$> (f <$> (asBool =<< fl a) <*> (asBool =<< fr a))
+  (Function fl, JSON _) -> Right . Function $ \a ->
+    JSON . J.Bool <$> (f <$> (asBool =<< fl a) <*> (asBool r))
+  (JSON _, Function fr) -> Right . Function $ \a ->
+    JSON . J.Bool <$> (f <$> (asBool l) <*> (asBool =<< fr a))
+  (JSON _, JSON _) -> JSON . J.Bool <$> (f <$> asBool l <*> asBool r)
 
 stringBinop :: (Text -> Text -> Text) -> Value -> Value -> Either String Value
 stringBinop f l r = JSON . J.String <$> (f <$> asString l <*> asString r)
@@ -192,4 +199,6 @@ applyOp op l r = case op of
 
 applyUnop :: S.Unop -> Value -> Either String Value
 applyUnop op x = case op of
-  S.Not -> JSON . J.Bool . not <$> asBool x
+  S.Not -> case x of
+    JSON _ -> JSON . J.Bool . not <$> asBool x
+    Function f -> Right . Function $ (\a -> JSON . J.Bool . not <$> (asBool =<< f a))

@@ -1,5 +1,5 @@
  * ✓ Generalise where clause ... move it out of brackets
- * abbreviated (point free) where clause 
+ * ✓ abbreviated (point free) where clause 
  * Spread function parameters
  * Tidy up ranges, use * instead of bare :.
  * Permit arbitrary expression as index
