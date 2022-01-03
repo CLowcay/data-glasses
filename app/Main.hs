@@ -1,5 +1,5 @@
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Main where
 
@@ -28,4 +28,4 @@ main = do
         Left err -> putStrLn err
         Right v -> case evaluate (M.insert (S.Identifier "x") (JSON v) initialContext) program of
           Left err -> putStrLn err
-          Right values -> for_ values (LT.putStrLn . \case JSON v -> J.encodeToLazyText v; Function _ -> "<function>")
+          Right values -> for_ values (LT.putStrLn . \case JSON r -> J.encodeToLazyText r; Function _ -> "<function>")

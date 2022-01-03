@@ -1,3 +1,4 @@
+ * New streaming implementation
  * Generalise where clause ... move it out of brackets
  * abbreviated (point free) where clause 
  * Spread function parameters

@@ -7,7 +7,6 @@ module DG.Syntax
     Selector (..),
     Operation (..),
     Slice (..),
-    Filter (..),
     Unop (..),
     Binop (..),
   )
@@ -36,11 +35,10 @@ data Expr
 
 data Selector
   = Field Identifier
-  | Slice Slice (Maybe Filter)
+  | Slice Slice
+  | Where Expr
   | Compose Selector Selector
   deriving (Eq, Show)
-
-data Filter = Filter Identifier Expr deriving (Eq, Show)
 
 data Slice
   = Index Int

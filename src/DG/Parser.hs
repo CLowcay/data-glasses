@@ -106,7 +106,8 @@ selector = do
   where
     singleSelector =
       choice
-        [ brackets (S.Slice <$> slice <*> optional whereExpr),
+        [ S.Slice <$> brackets slice,
+          S.Where <$> (whereP *> parentheses expression),
           S.Field <$> identifier
         ]
 
@@ -119,9 +120,6 @@ slice = do
         Nothing -> fail "Expected an index or range"
         Just index -> pure (S.Index index)
     ]
-
-whereExpr :: Parser S.Filter
-whereExpr = S.Filter <$> (as *> identifier) <*> (whereP *> expression)
 
 brackets :: Parser a -> Parser a
 brackets = between (lexeme "[") (lexeme "]")
