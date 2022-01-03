@@ -40,17 +40,20 @@ get ctx s v = case s of
   S.Field (S.Identifier name) -> case v of
     J.Object o -> Right (toList (o !? name))
     _ -> pure []
-  S.Slice slice -> case v of
-    J.Array a ->
-      case slice of
-        S.Index expr ->
+  S.Slice slice ->
+    case slice of
+      S.Index expr -> case v of
+        J.Array a ->
           evaluate ctx expr >>= asSingle >>= asInt
-            <&> \i -> [a ! i | i >= 0 && i < V.length a]
-        S.Range from to _ ->
-          let efrom = fromMaybe 0 from
-              rlen = fromMaybe (V.length a) to - efrom
-           in Right (V.toList (V.slice efrom rlen a))
-    _ -> pure []
+            <&> (\i -> [a ! i | i >= 0 && i < V.length a])
+        _ -> pure []
+      S.Range from to _ ->
+        case v of
+          J.Array a ->
+            let efrom = fromMaybe 0 from
+                rlen = fromMaybe (V.length a) to - efrom
+             in Right (V.toList (V.slice efrom rlen a))
+          _ -> pure []
   S.Where fexpr -> evaluateFilter ctx fexpr v <&> \passed -> [v | passed]
   S.Compose s1 s2 -> do
     r1s <- get ctx s1 v
@@ -73,19 +76,22 @@ tmapM ctx s f v = case s of
         _ -> pure (Object o)
       _ -> pure v
   S.Slice slice ->
-    Just <$> case v of
-      Array a ->
-        case slice of
-          S.Index expr ->
+    Just <$> case slice of
+      S.Index expr ->
+        case v of
+          Array a ->
             evaluate ctx expr >>= asSingle >>= asInt >>= \i ->
               if i >= 0 && i < V.length a
                 then (\case Nothing -> pure Nothing; Just x -> f x) (a ! i) <&> \vi -> Array (a // [(i, vi)])
                 else pure v
-          S.Range from to _ ->
+          _ -> pure v
+      S.Range from to _ ->
+        case v of
+          Array a ->
             let inRange i = maybe True (i >=) from && maybe True (i <) to
                 mapElement i = \case Just x -> if inRange i then f x else pure (Just x); Nothing -> pure Nothing
              in Array <$> V.imapM mapElement a
-      _ -> pure v
+          _ -> pure v
   S.Where fexpr ->
     evaluateFilter ctx fexpr (fromJSONM v)
       >>= \passed -> if passed then f v else pure (Just v)
