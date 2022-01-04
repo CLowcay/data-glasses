@@ -10,8 +10,9 @@ import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Void (Void)
-import Text.Megaparsec (MonadParsec (try), Parsec, between, choice, empty, many, satisfy, sepBy)
+import Text.Megaparsec (MonadParsec (notFollowedBy, try), Parsec, between, choice, empty, many, satisfy, sepBy)
 import Text.Megaparsec.Char (alphaNumChar, letterChar, space1)
+import qualified Text.Megaparsec.Char as P
 import qualified Text.Megaparsec.Char.Lexer as L
 
 type Parser = Parsec Void Text
@@ -19,8 +20,11 @@ type Parser = Parsec Void Text
 lexeme :: Parser a -> Parser a
 lexeme = L.lexeme (L.space space1 empty empty)
 
+word :: Text -> Parser ()
+word w = lexeme (P.string w *> notFollowedBy letterChar)
+
 boolean :: Parser Bool
-boolean = choice [True <$ lexeme "true", False <$ lexeme "false"]
+boolean = choice [True <$ word "true", False <$ word "false"]
 
 number :: Parser Int
 number = lexeme (L.signed (() <$ "") L.decimal)
@@ -39,13 +43,13 @@ comma = () <$ lexeme ","
 expression :: Parser S.Expr
 expression =
   choice
-    [ S.If <$> (lexeme "if" *> expression) <*> (lexeme "then" *> expression) <*> (lexeme "else" *> expression),
+    [ S.If <$> (word "if" *> expression) <*> (word "then" *> expression) <*> (word "else" *> expression),
       makeExprParser
         term
         [ [Prefix (S.Unop S.Not <$ lexeme "!")],
           [InfixL (S.Binop S.Times <$ lexeme "*"), InfixL (S.Binop S.Divide <$ lexeme "/")],
           [InfixL (S.Binop S.Plus <$ lexeme "+"), InfixL (S.Binop S.Minus <$ lexeme "-")],
-          [InfixL (S.Binop S.Modulo <$ lexeme "mod")],
+          [InfixL (S.Binop S.Modulo <$ word "mod")],
           [InfixL (S.Binop S.Concat <$ lexeme "++")],
           [ InfixN (S.Binop S.Eq <$ lexeme "=="),
             InfixN (S.Binop S.Neq <$ lexeme "!="),
@@ -54,8 +58,8 @@ expression =
             InfixN (S.Binop S.Gte <$ lexeme ">="),
             InfixN (S.Binop S.Lte <$ lexeme "<=")
           ],
-          [InfixL (S.Binop S.And <$ lexeme "and")],
-          [InfixL (S.Binop S.Or <$ lexeme "or")],
+          [InfixL (S.Binop S.And <$ word "and")],
+          [InfixL (S.Binop S.Or <$ word "or")],
           [InfixL (S.Sequence <$ comma)]
         ]
     ]
@@ -69,7 +73,7 @@ term = do
         S.Array <$> try (brackets (expression `sepBy` comma)),
         S.NumLit <$> try number,
         S.StringLit <$> try string,
-        S.NullLit <$ try (lexeme "null"),
+        S.NullLit <$ try (word "null"),
         S.BoolLit <$> try boolean,
         S.Variable <$> identifier
       ]
@@ -92,19 +96,19 @@ star :: Parser ()
 star = () <$ lexeme "*"
 
 as :: Parser ()
-as = () <$ lexeme "as"
+as = () <$ word "as"
 
 eq :: Parser ()
 eq = () <$ lexeme "="
 
 delete :: Parser ()
-delete = () <$ lexeme "delete"
+delete = () <$ word "delete"
 
 whereP :: Parser ()
-whereP = () <$ lexeme "where"
+whereP = () <$ word "where"
 
 inP :: Parser ()
-inP = () <$ lexeme "in"
+inP = () <$ word "in"
 
 selector :: Parser S.Selector
 selector = do
@@ -117,6 +121,7 @@ selector = do
           dot
             *> choice
               [ S.Where <$> (whereP *> parentheses expression),
+                S.Collect <$> (word "collect" *> parentheses expression),
                 S.Field <$> identifier
               ]
         ]

@@ -39,6 +39,7 @@ data Selector
   = Field Identifier
   | Slice Slice
   | Where Expr
+  | Collect Expr
   | Compose Selector Selector
   deriving (Eq, Show)
 

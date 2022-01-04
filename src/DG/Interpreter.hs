@@ -3,9 +3,9 @@
 
 module DG.Interpreter (evaluate, initialContext) where
 
-import Control.Monad (foldM, join, (<=<), (>=>))
-import DG.BuiltinFunctions (isArray, isBool, isNull, isNumber, isObject, isString)
-import DG.Runtime (JSONF (..), Value (..), asFunction, asJSON, fromJSONM, toJSONM)
+import Control.Monad (filterM, foldM, join, (<=<), (>=>))
+import DG.BuiltinFunctions (asArrayCollector, countCollector, isArray, isBool, isNull, isNumber, isObject, isString, meanCollector, productCollector, sumCollector)
+import DG.Runtime (JSONF (..), Value (..), asFunction, asJSON, fromJSONM, toJSONM, withCollector)
 import qualified DG.Syntax as S
 import qualified Data.Aeson as J
 import Data.Bifunctor (second)
@@ -18,6 +18,7 @@ import qualified Data.Map as M
 import Data.Maybe (fromMaybe, isNothing, mapMaybe)
 import Data.Scientific (Scientific, toBoundedInteger)
 import Data.Text (Text)
+import Data.Traversable (for)
 import Data.Vector ((!), (//))
 import qualified Data.Vector as V
 
@@ -26,38 +27,45 @@ type Context = Map S.Identifier Value
 initialContext :: Context
 initialContext =
   M.fromList
-    ( second Function
-        <$> [isNull, isBool, isString, isNumber, isObject, isArray]
+    ( ( second Function
+          <$> [isNull, isBool, isString, isNumber, isObject, isArray]
+      )
+        ++ (second Collector <$> [sumCollector, productCollector, countCollector])
+        ++ [second Collector asArrayCollector]
+        ++ [second Collector meanCollector]
     )
 
 lookupCtx :: Context -> S.Identifier -> Either String Value
 lookupCtx ctx var = maybe (Left ("Undefined variable " ++ show var)) Right (M.lookup var ctx)
 
-get :: Context -> S.Selector -> J.Value -> Either String [J.Value]
-get ctx s v = case s of
-  S.Field (S.Identifier name) -> case v of
-    J.Object o -> Right (toList (o !? name))
-    _ -> pure []
+get :: Context -> S.Selector -> [J.Value] -> Either String [J.Value]
+get ctx s vs = case s of
+  S.Field (S.Identifier name) ->
+    fmap concat . for vs $ \case J.Object o -> Right (toList (o !? name)); _ -> pure []
   S.Slice slice ->
     case slice of
       S.Index expr -> do
         ixs <- evaluate ctx expr
-        case v of
+        fmap concat . for vs $ \case
           J.Array a -> mapMaybe (a V.!?) <$> traverse asInt ixs
           J.Object o -> mapMaybe (o !?) <$> traverse asString ixs
           _ -> pure []
       S.Range from to _ ->
-        case v of
+        fmap concat . for vs $ \case
           J.Array a ->
             let efrom = fromMaybe 0 from
                 rlen = fromMaybe (V.length a) to - efrom
              in Right (V.toList (V.slice efrom rlen a))
           J.Object o | isNothing from && isNothing to -> Right (HM.elems o)
           _ -> pure []
-  S.Where fexpr -> evaluateFilter ctx fexpr v <&> \passed -> [v | passed]
-  S.Compose s1 s2 -> do
-    r1s <- get ctx s1 v
-    concat <$> traverse (get ctx s2) r1s
+  S.Where fexpr -> do
+    f <- evaluateFilterFunction ctx fexpr
+    filterM f vs
+  S.Collect cexpr -> do
+    collector <- asSingle =<< evaluate ctx cexpr
+    withCollector collector $ \(unit, inj, proj, op) ->
+      pure . proj <$> (foldM op unit =<< traverse inj vs)
+  S.Compose s1 s2 -> get ctx s2 =<< get ctx s1 vs
 
 tmap :: Context -> S.Selector -> (J.Value -> Either String J.Value) -> [J.Value] -> Either String [Value]
 tmap ctx s f v = mapMaybe (fmap (JSON . fromJSONM)) <$> traverse (tmapM ctx s (fmap (Just . toJSONM) . f . fromJSONM)) (toJSONM <$> v)
@@ -94,6 +102,7 @@ tmapM ctx s f v = case s of
   S.Where fexpr ->
     evaluateFilter ctx fexpr (fromJSONM v)
       >>= \passed -> if passed then f v else pure (Just v)
+  S.Collect _ -> Left "Cannot modify collected value"
   S.Compose s1 s2 -> tmapM ctx s1 (tmapM ctx s2 f) v
   where
     updateObject obj name = case obj !? name of
@@ -128,7 +137,7 @@ evaluate ctx e = case e of
   S.Selection expr selector operation -> do
     v <- traverse asJSON =<< evaluate ctx expr
     case operation of
-      S.Get -> fmap JSON . concat <$> traverse (get ctx selector) v
+      S.Get -> fmap JSON <$> get ctx selector v
       S.Delete ->
         mapMaybe (fmap (JSON . fromJSONM)) <$> traverse (tmapM ctx selector (const (Right Nothing))) (toJSONM <$> v)
       S.Set ex ->
@@ -147,7 +156,11 @@ evaluate ctx e = case e of
         evaluate ctx ex >>= asSingle >>= asString >>= \x -> tmap ctx selector (Right . stringOp (<> x)) v
 
 evaluateFilter :: Context -> S.Expr -> J.Value -> Either String Bool
-evaluateFilter ctx expr v = evaluate ctx expr >>= asSingle >>= asFunction >>= ($ [JSON v]) >>= asBool
+evaluateFilter ctx expr v = evaluateFilterFunction ctx expr >>= ($v)
+
+evaluateFilterFunction :: Context -> S.Expr -> Either String (J.Value -> Either String Bool)
+evaluateFilterFunction ctx expr =
+  (evaluate ctx expr >>= asSingle >>= asFunction) <&> (\f v -> f [JSON v] >>= asBool)
 
 asSingle :: Show a => [a] -> Either String a
 asSingle [x] = Right x
@@ -199,6 +212,7 @@ boolBinop f l r = case (l, r) of
   (JSON _, Function fr) -> Right . Function $ \a ->
     JSON . J.Bool <$> (f <$> asBool l <*> (asBool =<< fr a))
   (JSON _, JSON _) -> JSON . J.Bool <$> (f <$> asBool l <*> asBool r)
+  _ -> Left ("Expected JSON or function, found " ++ show l ++ " and " ++ show r)
 
 stringBinop :: (Text -> Text -> Text) -> Value -> Value -> Either String Value
 stringBinop f l r = JSON . J.String <$> (f <$> asString l <*> asString r)
@@ -225,3 +239,4 @@ applyUnop op x = case op of
   S.Not -> case x of
     JSON _ -> JSON . J.Bool . not <$> asBool x
     Function f -> Right . Function $ (\a -> JSON . J.Bool . not <$> (asBool =<< f a))
+    _ -> Left ("Expected JSON or function, found " ++ show x)
