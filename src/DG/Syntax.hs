@@ -65,6 +65,7 @@ data Binop
   | Minus
   | Times
   | Divide
+  | Modulo
   | Eq
   | Neq
   | Gt

@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module DG.Parser (expression) where
+module DG.Parser (expression, number) where
 
 import Control.Applicative (optional, (<|>))
 import Control.Monad.Combinators.Expr (Operator (..), makeExprParser)
@@ -23,7 +23,7 @@ boolean :: Parser Bool
 boolean = choice [True <$ lexeme "true", False <$ lexeme "false"]
 
 number :: Parser Int
-number = lexeme (L.signed empty L.decimal)
+number = lexeme (L.signed (() <$ "") L.decimal)
 
 string :: Parser Text
 string = lexeme ("\"" *> (T.pack <$> many (try escape <|> satisfy (/= '\"'))) <* "\"")
@@ -43,6 +43,7 @@ expression =
     [ [Prefix (S.Unop S.Not <$ lexeme "!")],
       [InfixL (S.Binop S.Times <$ lexeme "*"), InfixL (S.Binop S.Divide <$ lexeme "/")],
       [InfixL (S.Binop S.Plus <$ lexeme "+"), InfixL (S.Binop S.Minus <$ lexeme "-")],
+      [InfixL (S.Binop S.Modulo <$ lexeme "mod")],
       [InfixL (S.Binop S.Concat <$ lexeme "++")],
       [ InfixN (S.Binop S.Eq <$ lexeme "=="),
         InfixN (S.Binop S.Neq <$ lexeme "!="),

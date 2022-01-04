@@ -181,6 +181,9 @@ stringOp f = \case
 numBinop :: (Scientific -> Scientific -> Scientific) -> Value -> Value -> Either String Value
 numBinop f l r = JSON . J.Number <$> (f <$> asNumber l <*> asNumber r)
 
+intBinop :: (Int -> Int -> Int) -> Value -> Value -> Either String Value
+intBinop f l r = JSON . J.Number . fromIntegral <$> (f <$> asInt l <*> asInt r)
+
 cmpOp :: (J.Value -> J.Value -> Bool) -> Value -> Value -> Either String Value
 cmpOp f l r = JSON . J.Bool <$> (f <$> asJSON l <*> asJSON r)
 
@@ -203,6 +206,7 @@ applyOp op l r = case op of
   S.Minus -> numBinop (-) l r
   S.Times -> numBinop (*) l r
   S.Divide -> numBinop (/) l r
+  S.Modulo -> intBinop mod l r
   S.Eq -> cmpOp (==) l r
   S.Neq -> cmpOp (/=) l r
   S.Gt -> cmpOp (>) l r

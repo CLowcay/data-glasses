@@ -92,3 +92,5 @@ spec = parallel $ do
     "(as x in x + 1)(1)" `evaluatesTo` J.Number 2
     "(as x in (as y in x + y))(1)(2)" `evaluatesTo` J.Number 3
     "!(true or false) == !true and !false" `evaluatesTo` J.Bool True
+    "-5 mod 3" `evaluatesTo` J.Number 1
+    "-5 - -1" `evaluatesTo` J.Number (-4)
