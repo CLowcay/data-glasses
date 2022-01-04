@@ -31,6 +31,7 @@ data Expr
   | Binop Binop Expr Expr
   | Apply Expr [Expr]
   | Abstraction [Identifier] Expr
+  | Sequence Expr Expr
   deriving (Eq, Show)
 
 data Selector

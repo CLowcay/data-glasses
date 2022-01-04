@@ -108,6 +108,7 @@ evaluate ctx e = case e of
   S.NullLit -> Right [JSON J.Null]
   S.BoolLit b -> Right [JSON (J.Bool b)]
   S.Array as -> pure . JSON . J.Array . V.fromList . join <$> traverse (traverse asJSON <=< evaluate ctx) as
+  S.Sequence lExpr rExpr -> (++) <$> evaluate ctx lExpr <*> evaluate ctx rExpr
   S.Binop op lExpr rExpr -> do
     l <- asSingle =<< evaluate ctx lExpr
     r <- asSingle =<< evaluate ctx rExpr

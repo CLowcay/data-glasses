@@ -52,7 +52,8 @@ expression =
         InfixN (S.Binop S.Lte <$ lexeme "<=")
       ],
       [InfixL (S.Binop S.And <$ lexeme "and")],
-      [InfixL (S.Binop S.Or <$ lexeme "or")]
+      [InfixL (S.Binop S.Or <$ lexeme "or")],
+      [InfixL (S.Sequence <$ comma)]
     ]
 
 term :: Parser S.Expr

@@ -55,6 +55,13 @@ spec = parallel $ do
       example "x[\"some key$$\"]" (J.object [("some key$$", J.Number 123)]) (Right [J.Number 123])
     specify "x['a']['b'] in {a:{b:42}}" $
       example "x[\"a\"][\"b\"]" (J.object [("a", J.object [("b", J.Number 42)])]) (Right [J.Number 42])
+    specify "x[1,3] in [0,1,2,3,4]" $
+      example "x[1,3]" (J.Array (V.fromList (J.Number . fromIntegral @Int <$> [0 .. 4]))) (Right [J.Number 1, J.Number 3])
+    specify "x['a','b'] in {a:1, b:2, c:3}" $
+      example
+        "x[\"a\", \"b\"]"
+        (J.object [("a", J.Number 1), ("b", J.Number 2), ("c", J.Number 3)])
+        (Right [J.Number 1, J.Number 2])
   describe "set" $ do
     specify "x.a = 'xyz' in {a:null} is {a:'xyz'}" $
       example "x.a = \"xyz\"" (J.object [("a", J.Null)]) (Right [J.object [("a", J.String "xyz")]])
