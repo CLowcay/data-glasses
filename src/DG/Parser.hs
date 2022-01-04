@@ -70,10 +70,9 @@ term = do
       ]
 
   selection <-
-    optional $
-      lexeme dot *> do
-        S.Selection value <$> selector
-          <*> (fromMaybe S.Get <$> optional operation)
+    optional $ do
+      S.Selection value <$> selector
+        <*> (fromMaybe S.Get <$> optional operation)
 
   applications <- many (parentheses (expression `sepBy` comma))
   pure (foldl' S.Apply (fromMaybe value selection) applications)
@@ -105,13 +104,16 @@ inP = () <$ lexeme "in"
 selector :: Parser S.Selector
 selector = do
   s1 <- singleSelector
-  fromMaybe s1 <$> (optional . try) (dot *> (S.Compose s1 <$> selector))
+  fromMaybe s1 <$> (optional . try) (S.Compose s1 <$> selector)
   where
     singleSelector =
       choice
         [ S.Slice <$> brackets slice,
-          S.Where <$> (whereP *> parentheses expression),
-          S.Field <$> identifier
+          dot
+            *> choice
+              [ S.Where <$> (whereP *> parentheses expression),
+                S.Field <$> identifier
+              ]
         ]
 
 slice :: Parser S.Slice

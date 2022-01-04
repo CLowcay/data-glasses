@@ -40,19 +40,21 @@ spec = parallel $ do
       example "x.a.b.d.e" (J.object [("a", J.Number 123)]) (Right [])
     specify "[1,2,3]" $
       example "[1,2,3]" J.Null (Right [J.Array (V.fromList (J.Number <$> [1, 2, 3]))])
-    specify "x.b = [a.a.[*]] in {a:[1,2], b:null}" $
+    specify "x.b = [a.a[*]] in {a:[1,2], b:null}" $
       example
-        "x.b = [\"a\", x.a.[*]]"
+        "x.b = [\"a\", x.a[*]]"
         (J.object [("a", J.Array (V.fromList (J.Number <$> [1, 2]))), ("b", J.Null)])
         (Right [J.object [("b", J.Array (V.fromList [J.String "a", J.Number 1, J.Number 2])), ("a", J.Array (V.fromList (J.Number <$> [1, 2])))]])
-    specify "x.[3:5] in [0,1,2,3,4,5,6,7,8,9]" $
-      example "x.[3:5]" (J.Array (V.fromList (J.Number . fromIntegral @Int <$> [0 .. 9]))) (Right (J.Number <$> [3, 4]))
-    specify "x.[7:] in [0,1,2,3,4,5,6,7,8,9]" $
-      example "x.[7:]" (J.Array (V.fromList (J.Number . fromIntegral @Int <$> [0 .. 9]))) (Right (J.Number <$> [7, 8, 9]))
-    specify "x.[:3] in [0,1,2,3,4,5,6,7,8,9]" $
-      example "x.[:3]" (J.Array (V.fromList (J.Number . fromIntegral @Int <$> [0 .. 9]))) (Right (J.Number <$> [0, 1, 2]))
-    specify "x.['some key$$'] in {'some key$$':123}" $
-      example "x.[\"some key$$\"]" (J.object [("some key$$", J.Number 123)]) (Right [J.Number 123])
+    specify "x[3:5] in [0,1,2,3,4,5,6,7,8,9]" $
+      example "x[3:5]" (J.Array (V.fromList (J.Number . fromIntegral @Int <$> [0 .. 9]))) (Right (J.Number <$> [3, 4]))
+    specify "x[7:] in [0,1,2,3,4,5,6,7,8,9]" $
+      example "x[7:]" (J.Array (V.fromList (J.Number . fromIntegral @Int <$> [0 .. 9]))) (Right (J.Number <$> [7, 8, 9]))
+    specify "x[:3] in [0,1,2,3,4,5,6,7,8,9]" $
+      example "x[:3]" (J.Array (V.fromList (J.Number . fromIntegral @Int <$> [0 .. 9]))) (Right (J.Number <$> [0, 1, 2]))
+    specify "x['some key$$'] in {'some key$$':123}" $
+      example "x[\"some key$$\"]" (J.object [("some key$$", J.Number 123)]) (Right [J.Number 123])
+    specify "x['a']['b'] in {a:{b:42}}" $
+      example "x[\"a\"][\"b\"]" (J.object [("a", J.object [("b", J.Number 42)])]) (Right [J.Number 42])
   describe "set" $ do
     specify "x.a = 'xyz' in {a:null} is {a:'xyz'}" $
       example "x.a = \"xyz\"" (J.object [("a", J.Null)]) (Right [J.object [("a", J.String "xyz")]])
@@ -69,6 +71,11 @@ spec = parallel $ do
       example "x.a /= 2" (J.object [("a", J.Number 42)]) (Right [J.object [("a", J.Number 21)]])
     specify "x.a ++= 1 in {a:'42'}" $
       example "x.a ++= \"z\"" (J.object [("a", J.String "42")]) (Right [J.object [("a", J.String "42z")]])
+    specify "x[*] *= 2 in {a:1, b:2, c:3}" $
+      example
+        "x[*] *= 2"
+        (J.object [("a", J.Number 1), ("a", J.Number 2), ("a", J.Number 3)])
+        (Right [J.object [("a", J.Number 2), ("a", J.Number 4), ("a", J.Number 6)]])
   describe "delete" $ do
     specify "x.a = delete in {a:'xyz', b:123} is {b:123}" $
       example "x.a = delete" (J.object [("a", J.String "xyz"), ("b", J.Number 123)]) (Right [J.object [("b", J.Number 123)]])

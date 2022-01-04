@@ -4,7 +4,7 @@
  * ✓ Tidy up ranges, use * instead of bare :.
  * ✓ Permit arbitrary expression as index
  * ✓ Permit expressions with multiple results as index
- * .[ -> [
+ * ✓ .[ -> [
  * folds
  * Implement comma operator.  Lowest precedence.  e.g. a.b,c = x => (a.b),(c = x)
  * := operator (creates field if it doesn't exist, so different from =)
