@@ -38,23 +38,26 @@ comma = () <$ lexeme ","
 
 expression :: Parser S.Expr
 expression =
-  makeExprParser
-    term
-    [ [Prefix (S.Unop S.Not <$ lexeme "!")],
-      [InfixL (S.Binop S.Times <$ lexeme "*"), InfixL (S.Binop S.Divide <$ lexeme "/")],
-      [InfixL (S.Binop S.Plus <$ lexeme "+"), InfixL (S.Binop S.Minus <$ lexeme "-")],
-      [InfixL (S.Binop S.Modulo <$ lexeme "mod")],
-      [InfixL (S.Binop S.Concat <$ lexeme "++")],
-      [ InfixN (S.Binop S.Eq <$ lexeme "=="),
-        InfixN (S.Binop S.Neq <$ lexeme "!="),
-        InfixN (S.Binop S.Gt <$ lexeme ">"),
-        InfixN (S.Binop S.Lt <$ lexeme "<"),
-        InfixN (S.Binop S.Gte <$ lexeme ">="),
-        InfixN (S.Binop S.Lte <$ lexeme "<=")
-      ],
-      [InfixL (S.Binop S.And <$ lexeme "and")],
-      [InfixL (S.Binop S.Or <$ lexeme "or")],
-      [InfixL (S.Sequence <$ comma)]
+  choice
+    [ S.If <$> (lexeme "if" *> expression) <*> (lexeme "then" *> expression) <*> (lexeme "else" *> expression),
+      makeExprParser
+        term
+        [ [Prefix (S.Unop S.Not <$ lexeme "!")],
+          [InfixL (S.Binop S.Times <$ lexeme "*"), InfixL (S.Binop S.Divide <$ lexeme "/")],
+          [InfixL (S.Binop S.Plus <$ lexeme "+"), InfixL (S.Binop S.Minus <$ lexeme "-")],
+          [InfixL (S.Binop S.Modulo <$ lexeme "mod")],
+          [InfixL (S.Binop S.Concat <$ lexeme "++")],
+          [ InfixN (S.Binop S.Eq <$ lexeme "=="),
+            InfixN (S.Binop S.Neq <$ lexeme "!="),
+            InfixN (S.Binop S.Gt <$ lexeme ">"),
+            InfixN (S.Binop S.Lt <$ lexeme "<"),
+            InfixN (S.Binop S.Gte <$ lexeme ">="),
+            InfixN (S.Binop S.Lte <$ lexeme "<=")
+          ],
+          [InfixL (S.Binop S.And <$ lexeme "and")],
+          [InfixL (S.Binop S.Or <$ lexeme "or")],
+          [InfixL (S.Sequence <$ comma)]
+        ]
     ]
 
 term :: Parser S.Expr

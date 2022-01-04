@@ -32,6 +32,7 @@ data Expr
   | Apply Expr [Expr]
   | Abstraction [Identifier] Expr
   | Sequence Expr Expr
+  | If Expr Expr Expr
   deriving (Eq, Show)
 
 data Selector

@@ -122,6 +122,9 @@ evaluate ctx e = case e of
     if length args /= length params
       then Left ("Expected " ++ show (length params) ++ " arguments, found " ++ show (length args))
       else asSingle =<< evaluate (M.fromList (params `zip` args) `M.union` ctx) expr
+  S.If cond eThen eElse -> do
+    d <- evaluate ctx cond >>= asSingle >>= asBool
+    if d then evaluate ctx eThen else evaluate ctx eElse
   S.Selection expr selector operation -> do
     v <- traverse asJSON =<< evaluate ctx expr
     case operation of

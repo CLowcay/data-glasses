@@ -67,6 +67,11 @@ spec = parallel $ do
       example "x.a = \"xyz\"" (J.object [("a", J.Null)]) (Right [J.object [("a", J.String "xyz")]])
     specify "x.a as z = z * 3 + 1 in {a:4} is {a:13}" $
       example "x.a as z = z * 3 + 1" (J.object [("a", J.Number 4)]) (Right [J.object [("a", J.Number 13)]])
+    specify "x[*] as z = if z mod 2 == 0 then z + 1 else z - 1 in [1,2,3,4]" $
+      example
+        "x[*] as z = if z mod 2 == 0 then z + 1 else z - 1"
+        (J.Array (V.fromList (J.Number <$> [1, 2, 3, 4])))
+        (Right [J.Array (V.fromList (J.Number <$> [0, 3, 2, 5]))])
   describe "modify" $ do
     specify "x.a += 1 in {a:42}" $
       example "x.a += 1" (J.object [("a", J.Number 42)]) (Right [J.object [("a", J.Number 43)]])

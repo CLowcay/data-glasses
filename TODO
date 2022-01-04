@@ -8,7 +8,7 @@
  * folds
  * ✓ Implement comma operator.  Lowest precedence.  e.g. a.b,c = x => (a.b),(c = x)
  * mapping with indices
- * if expressions
+ * ✓ if expressions
  * let expressions
  * ✓ modulo operator
  * := operator (creates field if it doesn't exist, so different from =)
