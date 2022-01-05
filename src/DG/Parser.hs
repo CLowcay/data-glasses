@@ -144,9 +144,10 @@ parentheses = between (lexeme "(") (lexeme ")")
 operation :: Parser S.Operation
 operation =
   choice
-    [ S.Delete <$ try (eq <* delete),
+    [ try (S.Delete <$ eq <* delete),
       S.Set <$> (eq *> expression),
-      S.SetAs <$> (as *> identifier <* eq) <*> expression,
+      try (S.SetAs <$> (as *> identifier) <*> (eq *> expression)),
+      S.SetAsI <$> (as *> identifier) <*> (comma *> identifier) <*> (eq *> expression),
       S.PlusEq <$> (lexeme "+=" *> expression),
       S.MinusEq <$> (lexeme "-=" *> expression),
       S.TimesEq <$> (lexeme "*=" *> expression),

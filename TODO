@@ -8,7 +8,7 @@
  * ✓ .[ -> [
  * ✓ folds -- need 'collector' values (monoids)
  * ✓ Implement comma operator.  Lowest precedence.  e.g. a.b,c = x => (a.b),(c = x)
- * mapping with indices
+ * ✓ mapping with indices (Extend function type to include arity?)
  * ✓ if expressions
  * let expressions
  * ✓ modulo operator

@@ -4,7 +4,7 @@
 {-# LANGUAGE RankNTypes #-}
 
 module DG.Runtime
-  ( Function,
+  ( Function (..),
     Collector,
     Value (..),
     JSONF (..),
@@ -24,7 +24,7 @@ import Data.Text (Text)
 import Data.Vector (Vector)
 import qualified Data.Vector as V
 
-type Function = [Value] -> Either String Value
+data Function = F Int ([Value] -> Either String Value)
 
 type Collector a = (a, J.Value -> Either String a, a -> J.Value, a -> a -> Either String a)
 
@@ -42,7 +42,7 @@ withCollector v k = case v of Collector c -> k c; _ -> Left ("Expected collector
 instance Show Value where
   show c = case c of
     JSON v -> show v
-    Function _ -> "<function>"
+    Function (F arity _) -> "<function:" ++ show arity ++ ">"
     Collector _ -> "<collector>"
 
 data JSONF f

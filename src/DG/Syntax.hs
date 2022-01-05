@@ -53,6 +53,7 @@ data Operation
   | Delete
   | Set Expr
   | SetAs Identifier Expr
+  | SetAsI Identifier Identifier Expr
   | PlusEq Expr
   | MinusEq Expr
   | TimesEq Expr
