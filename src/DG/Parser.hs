@@ -21,7 +21,7 @@ lexeme :: Parser a -> Parser a
 lexeme = L.lexeme (L.space space1 empty empty)
 
 word :: Text -> Parser ()
-word w = lexeme (P.string w *> notFollowedBy letterChar)
+word w = lexeme (try (P.string w *> notFollowedBy letterChar))
 
 boolean :: Parser Bool
 boolean = choice [True <$ word "true", False <$ word "false"]

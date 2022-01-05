@@ -1,4 +1,4 @@
- * Fix parser error on 'asArray'.
+ * ✓ Fix parser error on 'asArray'.
  * ✓ Generalise where clause ... move it out of brackets
  * ✓ abbreviated (point free) where clause 
  * Spread function parameters

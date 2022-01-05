@@ -62,6 +62,9 @@ spec = parallel $ do
         "x[\"a\", \"b\"]"
         (J.object [("a", J.Number 1), ("b", J.Number 2), ("c", J.Number 3)])
         (Right [J.Number 1, J.Number 2])
+    specify "x[*].collect(asArray) in [1,2,3]" $
+      let v = J.Array (V.fromList (J.Number <$> [1, 2, 3]))
+       in example "x[*].collect(asArray)" v (Right [v])
   describe "set" $ do
     specify "x.a = 'xyz' in {a:null} is {a:'xyz'}" $
       example "x.a = \"xyz\"" (J.object [("a", J.Null)]) (Right [J.object [("a", J.String "xyz")]])
