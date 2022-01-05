@@ -125,7 +125,7 @@ evaluate ctx e = case e of
   S.Unop op expr -> pure <$> (evaluate ctx expr >>= asSingle >>= applyUnop op)
   S.Apply fExpr pExprs -> do
     f <- asFunction =<< asSingle =<< evaluate ctx fExpr
-    parameters <- traverse (asSingle <=< evaluate ctx) pExprs
+    parameters <- concat <$> traverse (evaluate ctx) pExprs
     pure <$> f parameters
   S.Abstraction params expr -> Right . pure . Function $ \args ->
     if length args /= length params
