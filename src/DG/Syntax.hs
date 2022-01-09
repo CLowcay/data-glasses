@@ -33,6 +33,7 @@ data Expr
   | Abstraction [Identifier] Expr
   | Sequence Expr Expr
   | If Expr Expr Expr
+  | Let [(Identifier, Expr)] Expr
   deriving (Eq, Show)
 
 data Selector

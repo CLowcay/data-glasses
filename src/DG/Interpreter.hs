@@ -149,6 +149,11 @@ evaluate ctx e = case e of
   S.If cond eThen eElse -> do
     d <- evaluate ctx cond >>= asSingle >>= asBool
     if d then evaluate ctx eThen else evaluate ctx eElse
+  S.Let definitions expr -> do
+    let evaluateAndExtend ctx' (var, definition) =
+          evaluate ctx' definition >>= asSingle <&> \v -> M.insert var v ctx'
+    extendedCtx <- foldM evaluateAndExtend ctx definitions
+    evaluate extendedCtx expr
   S.Selection expr selector operation -> do
     v <- traverse (fmap (Nothing,) . asJSON) =<< evaluate ctx expr
     case operation of

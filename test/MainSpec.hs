@@ -102,3 +102,5 @@ spec = parallel $ do
     "!(true or false) == !true and !false" `evaluatesTo` J.Bool True
     "-5 mod 3" `evaluatesTo` J.Number 1
     "-5 - -1" `evaluatesTo` J.Number (-4)
+    "let a = \"1\"; b = \"2\" in a ++ b" `evaluatesTo` J.String "12"
+    "if 1 ==2 then \"a\" else \"b\"" `evaluatesTo` J.String "b"
