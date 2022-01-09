@@ -38,6 +38,7 @@ data Expr
 data Selector
   = Field Identifier
   | Slice Slice
+  | Map Expr
   | Where Expr
   | Collect Expr
   | Compose Selector Selector

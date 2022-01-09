@@ -122,6 +122,7 @@ selector = do
             *> choice
               [ S.Where <$> (whereP *> parentheses expression),
                 S.Collect <$> (word "collect" *> parentheses expression),
+                S.Map <$> (word "map" *> parentheses expression),
                 S.Field <$> identifier
               ]
         ]

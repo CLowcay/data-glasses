@@ -4,7 +4,7 @@
 module DG.Interpreter (evaluate, initialContext) where
 
 import Control.Monad (filterM, foldM, join, (<=<), (>=>))
-import DG.BuiltinFunctions (asArrayCollector, countCollector, isArray, isBool, isNull, isNumber, isObject, isString, meanCollector, productCollector, sumCollector)
+import DG.BuiltinFunctions (asArrayCollector, concatCollector, countCollector, isArray, isBool, isNull, isNumber, isObject, isString, meanCollector, productCollector, stringify, sumCollector)
 import DG.Runtime (Function (F), JSONF (..), Value (..), asFunction, asJSON, fromJSONM, toJSONM, withCollector)
 import qualified DG.Syntax as S
 import qualified Data.Aeson as J
@@ -28,7 +28,7 @@ initialContext :: Context
 initialContext =
   M.fromList
     ( ( second Function
-          <$> [isNull, isBool, isString, isNumber, isObject, isArray]
+          <$> [isNull, isBool, isString, isNumber, isObject, isArray, stringify, concatCollector]
       )
         ++ (second Collector <$> [sumCollector, productCollector, countCollector])
         ++ [second Collector asArrayCollector]
@@ -61,6 +61,18 @@ get ctx s vs = case s of
   S.Where fexpr -> do
     f <- evaluateFilterFunction ctx fexpr
     filterM f vs
+  S.Map mexpr -> do
+    F arity f <- asFunction =<< asSingle =<< evaluate ctx mexpr
+    case arity of
+      1 -> mapM (traverse (asJSON <=< f . pure . JSON)) vs
+      2 ->
+        mapM
+          ( \(key, vk) -> do
+              k <- maybe (Left "No key") pure key
+              (key,) <$> (asJSON =<< f [keyToValue k, JSON vk])
+          )
+          vs
+      _ -> Left ("Invalid filter function.  Expected function with 1 or 2 parameters, found " ++ show arity)
   S.Collect cexpr -> do
     collector <- asSingle =<< evaluate ctx cexpr
     withCollector collector $ \(unit, inj, proj, op) ->
@@ -102,6 +114,7 @@ tmapM ctx s f (key, v) = case s of
   S.Where fexpr ->
     evaluateFilter ctx fexpr (key, fromJSONM v)
       >>= \passed -> if passed then f (key, v) else pure (Just v)
+  S.Map _ -> Left "Cannot modify mapped value"
   S.Collect _ -> Left "Cannot modify collected value"
   S.Compose s1 s2 -> tmapM ctx s1 (tmapM ctx s2 f) (key, v)
   where
