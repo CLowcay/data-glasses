@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module DG.Parser (expression, number) where
@@ -48,8 +49,15 @@ expression =
       makeExprParser
         term
         [ [Prefix (S.Unop S.Not <$ op "!")],
-          [InfixL (S.Binop S.Times <$ op "*"), InfixL (S.Binop S.Divide <$ op "/")],
-          [InfixL (S.Binop S.Plus <$ op "+"), InfixL (S.Binop S.Minus <$ op "-")],
+          [ InfixL (S.Binop S.Times <$ op "*"),
+            InfixL (S.Binop S.Divide <$ op "/"),
+            InfixL (S.Binop S.Intersection <$ word "intersection")
+          ],
+          [ InfixL (S.Binop S.Plus <$ op "+"),
+            InfixL (S.Binop S.Minus <$ op "-"),
+            InfixL (S.Binop S.Union <$ word "union"),
+            InfixL (S.Binop S.Difference <$ op "minus")
+          ],
           [InfixL (S.Binop S.Modulo <$ word "mod")],
           [InfixL (S.Binop S.Concat <$ op "++")],
           [ InfixN (S.Binop S.Eq <$ op "=="),
@@ -60,8 +68,7 @@ expression =
             InfixN (S.Binop S.Lte <$ op "<=")
           ],
           [InfixL (S.Binop S.And <$ word "and")],
-          [InfixL (S.Binop S.Or <$ word "or")],
-          [InfixL (S.Sequence <$ comma)]
+          [InfixL (S.Binop S.Or <$ word "or")]
         ]
     ]
 
@@ -72,8 +79,9 @@ term = do
       [ parentheses expression,
         S.Abstraction <$> (as *> (identifier `sepBy` comma)) <*> (inP *> expression),
         S.Array <$> try (brackets (expression `sepBy` comma)),
-        S.NumLit <$> try number,
-        S.StringLit <$> try string,
+        S.Object <$> braces (objectElement `sepBy` comma),
+        S.StringLit <$> string,
+        S.NumLit <$> number,
         S.NullLit <$ try (word "null"),
         S.BoolLit <$> try boolean,
         S.Variable <$> identifier
@@ -124,7 +132,7 @@ selector = do
   where
     singleSelector =
       choice
-        [ S.Slice <$> brackets slice,
+        [ S.Slice <$> brackets (slice `sepBy` comma),
           dot
             *> choice
               [ S.Where <$> (whereP *> parentheses expression),
@@ -143,11 +151,24 @@ slice =
       S.Index <$> expression
     ]
 
+objectElement :: Parser S.ObjectElement
+objectElement =
+  S.SimpleElement <$> choice [string, S.unIdentifier <$> identifier] <*> (colon *> expression) <|> do
+    key <- brackets expression
+    optional (as *> identifier)
+      >>= ( \case
+              Nothing -> S.ExprElement key <$> (colon *> expression)
+              Just keyName -> S.ExprAsElement key keyName <$> (colon *> expression)
+          )
+
 brackets :: Parser a -> Parser a
 brackets = between (lexeme "[") (lexeme "]")
 
 parentheses :: Parser a -> Parser a
 parentheses = between (lexeme "(") (lexeme ")")
+
+braces :: Parser a -> Parser a
+braces = between (lexeme "{") (lexeme "}")
 
 operation :: Parser S.Operation
 operation =

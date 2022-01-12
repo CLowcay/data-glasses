@@ -7,6 +7,7 @@ module DG.Syntax
     Selector (..),
     Operation (..),
     Slice (..),
+    ObjectElement (..),
     Unop (..),
     Binop (..),
   )
@@ -15,7 +16,7 @@ where
 import Data.Hashable (Hashable)
 import Data.Text (Text)
 
-newtype Identifier = Identifier Text
+newtype Identifier = Identifier {unIdentifier :: Text}
   deriving stock (Eq, Ord, Show)
   deriving newtype (Hashable)
 
@@ -26,19 +27,25 @@ data Expr
   | BoolLit Bool
   | NullLit
   | Array [Expr]
+  | Object [ObjectElement]
   | Selection Expr Selector Operation
   | Unop Unop Expr
   | Binop Binop Expr Expr
   | Apply Expr [Expr]
   | Abstraction [Identifier] Expr
-  | Sequence Expr Expr
   | If Expr Expr Expr
   | Let [(Identifier, Expr)] Expr
   deriving (Eq, Show)
 
+data ObjectElement
+  = SimpleElement Text Expr
+  | ExprElement Expr Expr
+  | ExprAsElement Expr Identifier Expr
+  deriving (Eq, Show)
+
 data Selector
   = Field Identifier
-  | Slice Slice
+  | Slice [Slice]
   | Map Expr
   | Where Expr
   | Collect Expr
@@ -80,4 +87,7 @@ data Binop
   | And
   | Or
   | Concat
+  | Union
+  | Intersection
+  | Difference
   deriving (Eq, Show)

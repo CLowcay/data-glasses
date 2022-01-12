@@ -104,3 +104,5 @@ spec = parallel $ do
     "-5 - -1" `evaluatesTo` J.Number (-4)
     "let a = \"1\"; b = \"2\" in a ++ b" `evaluatesTo` J.String "12"
     "if 1 ==2 then \"a\" else \"b\"" `evaluatesTo` J.String "b"
+    "\"A\" ++ \"B\"" `evaluatesTo` J.String "AB"
+    "[1,2] ++ [3]" `evaluatesTo` J.Array (V.fromList [J.Number 1, J.Number 2, J.Number 3])

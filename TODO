@@ -15,10 +15,12 @@
  * keys selector
  * Zipping?
  * := operator (creates field if it doesn't exist, so different from =)
+ * Rethink where clause - again
  * New streaming implementation
- * Object union operator and fold
- * Array concatenation operator and fold
- * Object constructors:
+ * ✓ Object union operator and fold
+ * ✓ Array concatenation operator and fold
+ * ✓ Delete comma operator, make it part of [] syntax instead
+ * ✓ Object constructors:
     {a:123}
     {[x.z]: 123}
     {[xs] as key: key ++ "1"}
