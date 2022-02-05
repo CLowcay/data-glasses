@@ -27,6 +27,7 @@ library
   exposed-modules:
       DG.BuiltinFunctions
       DG.Interpreter
+      DG.Json
       DG.Parser
       DG.Runtime
       DG.Syntax
@@ -37,6 +38,7 @@ library
   ghc-options: -Wall
   build-depends:
       aeson
+    , attoparsec
     , base >=4.7 && <5
     , bytestring
     , containers
@@ -59,6 +61,7 @@ executable dagl
   ghc-options: -Wall -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       aeson
+    , attoparsec
     , base >=4.7 && <5
     , bytestring
     , containers
@@ -77,6 +80,7 @@ test-suite data-glasses-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      JsonSpec
       MainSpec
       Paths_data_glasses
   hs-source-dirs:
@@ -84,6 +88,7 @@ test-suite data-glasses-test
   ghc-options: -Wall -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       aeson
+    , attoparsec
     , base >=4.7 && <5
     , bytestring
     , containers
