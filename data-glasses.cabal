@@ -42,11 +42,13 @@ library
     , base >=4.7 && <5
     , bytestring
     , containers
+    , exceptions
     , hashable
     , megaparsec
     , mtl
     , parser-combinators
     , scientific
+    , streamly
     , text
     , unordered-containers
     , vector
@@ -66,11 +68,13 @@ executable dagl
     , bytestring
     , containers
     , data-glasses
+    , exceptions
     , hashable
     , megaparsec
     , mtl
     , parser-combinators
     , scientific
+    , streamly
     , text
     , unordered-containers
     , vector
@@ -81,7 +85,6 @@ test-suite data-glasses-test
   main-is: Spec.hs
   other-modules:
       JsonSpec
-      MainSpec
       Paths_data_glasses
   hs-source-dirs:
       test
@@ -93,12 +96,14 @@ test-suite data-glasses-test
     , bytestring
     , containers
     , data-glasses
+    , exceptions
     , hashable
     , hspec
     , megaparsec
     , mtl
     , parser-combinators
     , scientific
+    , streamly
     , text
     , unordered-containers
     , vector

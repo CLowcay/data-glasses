@@ -1,7 +1,19 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module DG.Json (JsonE (..), bom, value, string, PureJSON, jsonText, compactPrint) where
+module DG.Json
+  ( JsonE (..),
+    Object,
+    bom,
+    value,
+    string,
+    PureJSON,
+    jsonText,
+    compactPrint,
+    deannotate,
+    parseJson,
+  )
+where
 
 import Control.Applicative (optional)
 import Control.Monad (void)
@@ -14,7 +26,7 @@ import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Builder as BB
 import Data.Functor ((<&>))
-import Data.List (intersperse)
+import Data.List (intercalate, intersperse)
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
@@ -26,26 +38,51 @@ import qualified Data.Text.Encoding.Error as T
 import Data.Vector (Vector)
 import qualified Data.Vector as V
 import Data.Void (Void, absurd)
-import Debug.Trace (traceShow)
+import System.IO (Handle)
 import Prelude hiding (String, exp, null)
 
 -- | A value that is either JSON or some other type e.
 data JsonE e
   = Null
-  | Boolean Bool
+  | Bool Bool
   | Number Scientific
   | String Text
   | Array (Vector (JsonE e))
-  | -- | Try to maintain the order just in case it matters, but also create a
-    -- lazy index to accelerate lookups
-    Object (Vector (Text, JsonE e)) ObjectIndex
+  | Object (Object e)
   | -- | Extension point for non-JSON values
     Extention e
-  deriving (Eq, Show)
+  deriving (Eq, Ord, Show)
+
+-- | Try to maintain the order just in case it matters, but also create a lazy
+-- index to accelerate lookups
+type Object e = Map Text (JsonE e)
 
 type PureJSON = JsonE Void
 
-type ObjectIndex = (Map Text [Int])
+-- | Remove annotations from a JsonE tree
+deannotate :: JsonE a -> Maybe PureJSON
+deannotate = \case
+  Null -> Just Null
+  Bool b -> Just (Bool b)
+  Number n -> Just (Number n)
+  String txt -> Just (String txt)
+  Array values -> Just (Array (V.mapMaybe deannotate values))
+  Object fields -> Just (Object (M.mapMaybe deannotate fields))
+  Extention _ -> Nothing
+
+-- | Parse JSON from a file handle. Does not close the handle.
+parseJson :: Handle -> IO (Either Text (JsonE e))
+parseJson h = go (A.parse jsonText)
+  where
+    -- B.hGet returns an empty byte string on EOF, which signals to the
+    -- continuation that there is no more input.
+    go k = handleResult . k =<< B.hGet h chunkSize
+    handleResult = \case
+      A.Done _ r -> pure (Right r)
+      A.Fail _ ctx message ->
+        pure . Left $ T.pack message <> " in " <> T.pack (intercalate "/" ctx)
+      A.Partial k -> go k
+    chunkSize = 32 * 1024
 
 -- | The UTF-8 Byte-order-mark.  RFC7159 says that we are permitted to ignore
 -- this if it appears at the start of the JSON stream, but we are not permitted
@@ -77,7 +114,7 @@ value =
     [ false,
       null,
       true,
-      object <&> \o -> Object o (index o),
+      Object <$> object,
       Array <$> array,
       Number <$> number,
       String <$> string
@@ -86,7 +123,7 @@ value =
 
 -- | RFC7159 section 3
 false :: A.Parser (JsonE a)
-false = Boolean False <$ A.string "false" <?> "false"
+false = Bool False <$ A.string "false" <?> "false"
 
 -- | RFC7159 section 3
 null :: A.Parser (JsonE a)
@@ -94,11 +131,11 @@ null = Null <$ A.string "null" <?> "null"
 
 -- | RFC7159 section 3
 true :: A.Parser (JsonE a)
-true = Boolean True <$ A.string "true" <?> "true"
+true = Bool True <$ A.string "true" <?> "true"
 
 -- | RFC7159 section 4
-object :: A.Parser (Vector (Text, JsonE a))
-object = beginObject *> (V.fromList <$> (member `A.sepBy` valueSeparator)) <* endObject <?> "object"
+object :: A.Parser (Object a)
+object = beginObject *> (M.fromList <$> (member `A.sepBy` valueSeparator)) <* endObject <?> "object"
   where
     member = (,) <$> (string <* nameSeparator) <*> value <?> "member"
 
@@ -182,31 +219,27 @@ string = quotationMark *> chars <* quotationMark <?> "string"
       x4 <- fromIntegral <$> hexit
       pure (x1 `shiftL` 12 .|. x2 `shiftL` 8 .|. x3 `shiftL` 4 .|. x4)
 
--- | Index a JSON object
-index :: Vector (Text, JsonE e) -> ObjectIndex
-index o = M.fromListWith (++) (V.toList (V.imap (\i (l, _) -> (l, [i])) o))
-
 -- | Print JSON in a compact format
 compactPrint :: PureJSON -> BB.Builder
 compactPrint = \case
   Null -> "null"
-  Boolean True -> "true"
-  Boolean False -> "false"
+  Bool True -> "true"
+  Bool False -> "false"
   Number n -> printNumber n
   String txt -> printString txt
   Array a -> "[" <> compactArray a <> "]"
-  Object o _ -> "{" <> compactObject o <> "}"
+  Object o -> "{" <> compactObject o <> "}"
   Extention v -> absurd v
   where
     compactArray a = mconcat (intersperse "," (compactPrint <$> V.toList a))
-    compactObject o = mconcat (intersperse "," (V.toList o <&> \(l, v) -> printString l <> ":" <> compactPrint v))
+    compactObject o = mconcat (intersperse "," (M.toList o <&> \(l, v) -> printString l <> ":" <> compactPrint v))
 
 printNumber :: Scientific -> BB.Builder
 printNumber n =
   (if n < 0 then "-" else "")
     <> ( if (n > 9999999 || n <= 0x01) && (exp >= digits + 4 || exp < (-2))
            then formatScientific
-           else traceShow (mantissa, exp, digits) formatDecimal
+           else formatDecimal
        )
   where
     (mantissa, exp) = first (abs <$>) (toDecimalDigits n)

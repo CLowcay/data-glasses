@@ -27,8 +27,8 @@ spec :: Spec
 spec = parallel $ do
   describe "json" $ do
     "null" `shouldParseAs` Null
-    "true" `shouldParseAs` Boolean True
-    "false" `shouldParseAs` Boolean False
+    "true" `shouldParseAs` Bool True
+    "false" `shouldParseAs` Bool False
     " \t\n\r\nnull\t\r\n\n  " `shouldParseAs` Null
     "\"\"" `shouldParseAs` String ""
     "\"abc123,./??\"" `shouldParseAs` String "abc123,./??"
@@ -57,31 +57,17 @@ spec = parallel $ do
     "1.111e-32" `shouldParseAs` Number 1.111e-32
     "[]" `shouldParseAs` Array (V.fromList [])
     "  [ \r\n\t  \n ]  " `shouldParseAs` Array (V.fromList [])
-    " [true]" `shouldParseAs` Array (V.fromList [Boolean True])
-    " [true  \r\n, false,null]" `shouldParseAs` Array (V.fromList [Boolean True, Boolean False, Null])
-    "[[true],false]" `shouldParseAs` Array (V.fromList [Array (V.fromList [Boolean True]), Boolean False])
-    "{}" `shouldParseAs` Object (V.fromList []) M.empty
-    "\t\t{ \r\n}  " `shouldParseAs` Object (V.fromList []) M.empty
-    "{\"a\":true}" `shouldParseAs` Object (V.fromList [("a", Boolean True)]) (M.fromList [("a", [0])])
-    "\t{ \"a\"\t:   true }  " `shouldParseAs` Object (V.fromList [("a", Boolean True)]) (M.fromList [("a", [0])])
+    " [true]" `shouldParseAs` Array (V.fromList [Bool True])
+    " [true  \r\n, false,null]" `shouldParseAs` Array (V.fromList [Bool True, Bool False, Null])
+    "[[true],false]" `shouldParseAs` Array (V.fromList [Array (V.fromList [Bool True]), Bool False])
+    "{}" `shouldParseAs` Object M.empty
+    "\t\t{ \r\n}  " `shouldParseAs` Object M.empty
+    "{\"a\":true}" `shouldParseAs` Object (M.fromList [("a", Bool True)])
+    "\t{ \"a\"\t:   true }  " `shouldParseAs` Object (M.fromList [("a", Bool True)])
     "{\"a\":true, \"b\":2, \"c\": [{}]}"
-      `shouldParseAs` Object
-        ( V.fromList
-            [ ("a", Boolean True),
-              ("b", Number 2),
-              ("c", Array (V.fromList [Object (V.fromList []) M.empty]))
-            ]
-        )
-        (M.fromList [("a", [0]), ("b", [1]), ("c", [2])])
+      `shouldParseAs` Object (M.fromList [("a", Bool True), ("b", Number 2), ("c", Array (V.fromList [Object M.empty]))])
     "{\"a\":true, \"b\":1, \"a\":false}"
-      `shouldParseAs` Object
-        ( V.fromList
-            [ ("a", Boolean True),
-              ("b", Number 1),
-              ("a", Boolean False)
-            ]
-        )
-        (M.fromList [("a", [2, 0]), ("b", [1])])
+      `shouldParseAs` Object (M.fromList [("a", Bool False), ("b", Number 1)])
     describe "compactPrint" $ do
       "null" `roundTripsTo` "null"
       "  null" `roundTripsTo` "null"

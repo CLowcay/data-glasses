@@ -1,72 +1,53 @@
 {-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
 
 module DG.Runtime
   ( Function (..),
     Collector,
+    JsonValue,
     Value (..),
-    JSONF (..),
+    JsonMeta (..),
+    RuntimeException (..),
+    runtimeError,
     asJSON,
     asFunction,
-    toJSONM,
-    fromJSONM,
     withCollector,
   )
 where
 
-import qualified Data.Aeson as J
-import Data.HashMap.Lazy (HashMap)
-import qualified Data.HashMap.Lazy as HM
-import Data.Scientific (Scientific)
-import Data.Text (Text)
-import Data.Vector (Vector)
-import qualified Data.Vector as V
+import Control.Exception (Exception, SomeException)
+import Control.Monad.Catch (MonadThrow (throwM))
+import DG.Json (JsonE)
 
-data Function = F Int ([Value] -> Either String Value)
+data JsonMeta = Tombstone deriving (Eq, Ord, Show)
 
-type Collector a = (a, J.Value -> Either String a, a -> J.Value, a -> a -> Either String a)
+type JsonValue = JsonE JsonMeta
 
-data Value = JSON J.Value | forall a. Collector (Collector a) | Function Function
+data Function = F Int ([Value] -> Either SomeException Value)
 
-asJSON :: Value -> Either String J.Value
-asJSON = \case JSON v -> Right v; v -> Left ("Expected JSON value, found " ++ show v)
+type Collector a = (a, JsonValue -> Either SomeException a, a -> JsonValue, a -> a -> Either SomeException a)
 
-asFunction :: Value -> Either String Function
-asFunction = \case Function v -> Right v; v -> Left ("Expected function value, found " ++ show v)
+data Value = JSON JsonValue | forall a. Collector (Collector a) | Function Function
 
-withCollector :: Value -> (forall a. Collector a -> Either String b) -> Either String b
-withCollector v k = case v of Collector c -> k c; _ -> Left ("Expected collector value, found " ++ show v)
+data RuntimeException = RuntimeException String deriving (Show)
+
+instance Exception RuntimeException
+
+runtimeError :: MonadThrow m => String -> m a
+runtimeError = throwM . RuntimeException
+
+asJSON :: MonadThrow m => Value -> m JsonValue
+asJSON = \case JSON v -> pure v; v -> runtimeError ("Expected JSON value, found " ++ show v)
+
+asFunction :: MonadThrow m => Value -> m Function
+asFunction = \case Function v -> pure v; v -> runtimeError ("Expected function value, found " ++ show v)
+
+withCollector :: MonadThrow m => Value -> (forall a. Collector a -> m b) -> m b
+withCollector v k = case v of Collector c -> k c; _ -> runtimeError ("Expected collector value, found " ++ show v)
 
 instance Show Value where
   show c = case c of
     JSON v -> show v
     Function (F arity _) -> "<function:" ++ show arity ++ ">"
     Collector _ -> "<collector>"
-
-data JSONF f
-  = Null
-  | Boolean Bool
-  | Number Scientific
-  | Str Text
-  | Array (Vector (f (JSONF f)))
-  | Object (HashMap Text (f (JSONF f)))
-
-toJSONM :: J.Value -> JSONF Maybe
-toJSONM = \case
-  J.Object o -> Object (Just . toJSONM <$> o)
-  J.Array a -> Array (Just . toJSONM <$> a)
-  J.String s -> Str s
-  J.Number n -> Number n
-  J.Bool b -> Boolean b
-  J.Null -> Null
-
-fromJSONM :: JSONF Maybe -> J.Value
-fromJSONM = \case
-  Null -> J.Null
-  Boolean b -> J.Bool b
-  Number n -> J.Number n
-  Str s -> J.String s
-  Array a -> J.Array (V.mapMaybe (fmap fromJSONM) a)
-  Object o -> J.Object (HM.mapMaybe (fmap fromJSONM) o)
