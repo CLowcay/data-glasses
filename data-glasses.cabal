@@ -37,8 +37,7 @@ library
       src
   ghc-options: -Wall
   build-depends:
-      aeson
-    , attoparsec
+      attoparsec
     , base >=4.7 && <5
     , bytestring
     , containers
@@ -62,8 +61,7 @@ executable dagl
       app
   ghc-options: -Wall -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      aeson
-    , attoparsec
+      attoparsec
     , base >=4.7 && <5
     , bytestring
     , containers
@@ -90,8 +88,7 @@ test-suite data-glasses-test
       test
   ghc-options: -Wall -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      aeson
-    , attoparsec
+      attoparsec
     , base >=4.7 && <5
     , bytestring
     , containers
