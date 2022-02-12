@@ -35,10 +35,3 @@ main = do
             JSON r -> maybe (pure ()) (LB.hPut stdout . BB.toLazyByteString . compactPrint) (deannotate r) >> B.hPut stdout "\n"
             Function _ -> B.hPut stdout "<function>\n"
             Collector _ -> B.hPut stdout "<collector>\n"
-
---case J.eitherDecode stdin of
---  Left err -> putStrLn err
---  Right v -> undefined
---  --Right v -> case evaluate (M.insert (S.Identifier "x") (JSON v) initialContext) program of
---  --  Left err -> putStrLn err
---  --  Right values -> for_ values (LT.putStrLn . \case JSON r -> J.encodeToLazyText r; Function _ -> "<function>")
