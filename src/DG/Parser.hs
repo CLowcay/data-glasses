@@ -5,8 +5,9 @@ module DG.Parser (expression, number) where
 
 import Control.Applicative (optional, (<|>))
 import Control.Monad.Combinators.Expr (Operator (..), makeExprParser)
-import qualified DG.Syntax as S
+import qualified DG.Syntax as DG
 import Data.List (foldl')
+import Data.List.NonEmpty (NonEmpty, some1)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -38,62 +39,62 @@ string = lexeme ("\"" *> (T.pack <$> many (try escape <|> satisfy (/= '\"'))) <*
   where
     escape = "\\" *> choice ['"' <$ "\"", '\r' <$ "r", '\n' <$ "n", '\t' <$ "t"]
 
-identifier :: Parser S.Identifier
-identifier = lexeme (S.Identifier . T.pack <$> ((:) <$> letterChar <*> many alphaNumChar))
+identifier :: Parser DG.Identifier
+identifier = lexeme (DG.Identifier . T.pack <$> ((:) <$> letterChar <*> many alphaNumChar))
 
-expression :: Parser S.Expr
+expression :: Parser DG.Expr
 expression =
   choice
-    [ S.If <$> (word "if" *> expression) <*> (word "then" *> expression) <*> (word "else" *> expression),
-      S.Let <$> (word "let" *> (((,) <$> identifier <*> (eq *> expression)) `sepBy` semi)) <*> (inP *> expression),
+    [ DG.If <$> (word "if" *> expression) <*> (word "then" *> expression) <*> (word "else" *> expression),
+      DG.Let <$> (word "let" *> (((,) <$> identifier <*> (eq *> expression)) `sepBy` semi)) <*> (inP *> expression),
       makeExprParser
         term
-        [ [Prefix (S.Unop S.Not <$ op "!")],
-          [ InfixL (S.Binop S.Times <$ op "*"),
-            InfixL (S.Binop S.Divide <$ op "/"),
-            InfixL (S.Binop S.Intersection <$ word "intersection")
+        [ [Prefix (DG.Unop DG.Not <$ op "!")],
+          [ InfixL (DG.Binop DG.Times <$ op "*"),
+            InfixL (DG.Binop DG.Divide <$ op "/"),
+            InfixL (DG.Binop DG.Intersection <$ word "intersection")
           ],
-          [ InfixL (S.Binop S.Plus <$ op "+"),
-            InfixL (S.Binop S.Minus <$ op "-"),
-            InfixL (S.Binop S.Union <$ word "union"),
-            InfixL (S.Binop S.Difference <$ op "minus")
+          [ InfixL (DG.Binop DG.Plus <$ op "+"),
+            InfixL (DG.Binop DG.Minus <$ op "-"),
+            InfixL (DG.Binop DG.Union <$ word "union"),
+            InfixL (DG.Binop DG.Difference <$ op "minus")
           ],
-          [InfixL (S.Binop S.Modulo <$ word "mod")],
-          [InfixL (S.Binop S.Concat <$ op "++")],
-          [ InfixN (S.Binop S.Eq <$ op "=="),
-            InfixN (S.Binop S.Neq <$ op "!="),
-            InfixN (S.Binop S.Gt <$ op ">"),
-            InfixN (S.Binop S.Lt <$ op "<"),
-            InfixN (S.Binop S.Gte <$ op ">="),
-            InfixN (S.Binop S.Lte <$ op "<=")
+          [InfixL (DG.Binop DG.Modulo <$ word "mod")],
+          [InfixL (DG.Binop DG.Concat <$ op "++")],
+          [ InfixN (DG.Binop DG.Eq <$ op "=="),
+            InfixN (DG.Binop DG.Neq <$ op "!="),
+            InfixN (DG.Binop DG.Gt <$ op ">"),
+            InfixN (DG.Binop DG.Lt <$ op "<"),
+            InfixN (DG.Binop DG.Gte <$ op ">="),
+            InfixN (DG.Binop DG.Lte <$ op "<=")
           ],
-          [InfixL (S.Binop S.And <$ word "and")],
-          [InfixL (S.Binop S.Or <$ word "or")]
+          [InfixL (DG.Binop DG.And <$ word "and")],
+          [InfixL (DG.Binop DG.Or <$ word "or")]
         ]
     ]
 
-term :: Parser S.Expr
+term :: Parser DG.Expr
 term = do
   value <-
     choice
       [ parentheses expression,
-        S.Abstraction <$> (as *> (identifier `sepBy` comma)) <*> (inP *> expression),
-        S.Array <$> try (brackets (expression `sepBy` comma)),
-        S.Object <$> braces (objectElement `sepBy` comma),
-        S.StringLit <$> string,
-        S.NumLit <$> number,
-        S.NullLit <$ try (word "null"),
-        S.BoolLit <$> try boolean,
-        S.Variable <$> identifier
+        DG.Abstraction <$> (as *> (identifier `sepBy` comma)) <*> (inP *> expression),
+        DG.Array <$> try (brackets (expression `sepBy` comma)),
+        DG.Object <$> braces (objectElement `sepBy` comma),
+        DG.StringLit <$> string,
+        DG.NumLit <$> number,
+        DG.NullLit <$ try (word "null"),
+        DG.BoolLit <$> try boolean,
+        DG.Variable <$> identifier
       ]
 
   selection <-
     optional $ do
-      S.Selection value <$> selector
-        <*> (fromMaybe S.Get <$> optional operation)
+      DG.Selection value <$> selector
+        <*> (fromMaybe DG.Get <$> optional operation)
 
   applications <- many (parentheses (expression `sepBy` comma))
-  pure (foldl' S.Apply (fromMaybe value selection) applications)
+  pure (foldl' DG.Apply (fromMaybe value selection) applications)
 
 dot :: Parser ()
 dot = () <$ op "."
@@ -125,40 +126,38 @@ whereP = () <$ word "where"
 inP :: Parser ()
 inP = () <$ word "in"
 
-selector :: Parser S.Selector
-selector = do
-  s1 <- singleSelector
-  fromMaybe s1 <$> (optional . try) (S.Compose s1 <$> selector)
+selector :: Parser (NonEmpty DG.Selector)
+selector = some1 singleSelector
   where
     singleSelector =
       choice
-        [ S.Slice <$> brackets (slice `sepBy` comma),
+        [ DG.Slice <$> brackets (slice `sepBy` comma),
           dot
             *> choice
-              [ S.Where <$> (whereP *> parentheses expression),
-                S.Collect <$> (word "collect" *> parentheses expression),
-                S.Map <$> (word "map" *> parentheses expression),
-                S.Field <$> identifier
+              [ DG.Where <$> (whereP *> parentheses expression),
+                DG.Collect <$> (word "collect" *> parentheses expression),
+                DG.Map <$> (word "map" *> parentheses expression),
+                DG.Field <$> identifier
               ]
         ]
 
-slice :: Parser S.Slice
+slice :: Parser DG.Slice
 slice =
   choice
-    [ S.Range Nothing Nothing Nothing <$ star,
-      S.Range Nothing <$> (Just <$> (colon *> number)) <*> optional (colon *> number),
-      try (S.Range <$> (Just <$> number) <*> (colon *> optional number) <*> optional (colon *> number)),
-      S.Index <$> expression
+    [ DG.Range Nothing Nothing Nothing <$ star,
+      DG.Range Nothing <$> (Just <$> (colon *> number)) <*> optional (colon *> number),
+      try (DG.Range <$> (Just <$> number) <*> (colon *> optional number) <*> optional (colon *> number)),
+      DG.Index <$> expression
     ]
 
-objectElement :: Parser S.ObjectElement
+objectElement :: Parser DG.ObjectElement
 objectElement =
-  S.SimpleElement <$> choice [string, S.unIdentifier <$> identifier] <*> (colon *> expression) <|> do
+  DG.SimpleElement <$> choice [string, DG.unIdentifier <$> identifier] <*> (colon *> expression) <|> do
     key <- brackets expression
     optional (as *> identifier)
       >>= ( \case
-              Nothing -> S.ExprElement key <$> (colon *> expression)
-              Just keyName -> S.ExprAsElement key keyName <$> (colon *> expression)
+              Nothing -> DG.ExprElement key <$> (colon *> expression)
+              Just keyName -> DG.ExprAsElement key keyName <$> (colon *> expression)
           )
 
 brackets :: Parser a -> Parser a
@@ -170,16 +169,16 @@ parentheses = between (lexeme "(") (lexeme ")")
 braces :: Parser a -> Parser a
 braces = between (lexeme "{") (lexeme "}")
 
-operation :: Parser S.Operation
+operation :: Parser DG.Operation
 operation =
   choice
-    [ try (S.Delete <$ eq <* delete),
-      S.Set <$> (eq *> expression),
-      try (S.SetAs <$> (as *> identifier) <*> (eq *> expression)),
-      S.SetAsI <$> (as *> identifier) <*> (comma *> identifier) <*> (eq *> expression),
-      S.PlusEq <$> (op "+=" *> expression),
-      S.MinusEq <$> (op "-=" *> expression),
-      S.TimesEq <$> (op "*=" *> expression),
-      S.DivEq <$> (op "/=" *> expression),
-      S.ConcatEq <$> (op "++=" *> expression)
+    [ try (DG.Delete <$ eq <* delete),
+      DG.Set <$> (eq *> expression),
+      try (DG.SetAs <$> (as *> identifier) <*> (eq *> expression)),
+      DG.SetAsI <$> (as *> identifier) <*> (comma *> identifier) <*> (eq *> expression),
+      DG.PlusEq <$> (op "+=" *> expression),
+      DG.MinusEq <$> (op "-=" *> expression),
+      DG.TimesEq <$> (op "*=" *> expression),
+      DG.DivEq <$> (op "/=" *> expression),
+      DG.ConcatEq <$> (op "++=" *> expression)
     ]

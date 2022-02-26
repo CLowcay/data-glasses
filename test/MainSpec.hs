@@ -8,13 +8,13 @@ import DG.Interpreter (evaluate, initialContext)
 import DG.Json (JsonE (..), PureJSON, deannotate)
 import DG.Parser (expression)
 import DG.Runtime (JsonMeta, Value (..), asJSON)
-import qualified DG.Syntax as S
+import qualified DG.Syntax as DG
 import Data.Bifunctor (first)
 import Data.Either (isLeft)
 import qualified Data.Map as M
 import Data.Text (Text)
 import qualified Data.Vector as V
-import qualified Streamly.Prelude as SL
+import qualified Streamly.Prelude as S
 import Test.Hspec (Spec, describe, hspec, parallel, shouldBe, specify)
 import Text.Megaparsec (eof, errorBundlePretty, runParser)
 
@@ -26,7 +26,7 @@ example expr input expected =
   case runParser (expression <* eof) "expression" expr of
     Left errors -> if isLeft expected then pure () else fail (errorBundlePretty errors)
     Right program ->
-      let results = SL.toList (SL.mapMaybe deannotate (asJSON =<< evaluate (M.insert (S.Identifier "x") (JSON input) initialContext) program))
+      let results = S.toList (S.mapMaybe deannotate (asJSON =<< evaluate (M.insert (DG.Identifier "x") (JSON input) initialContext) program))
        in first displayException results `shouldBe` first displayException expected
 
 evaluatesTo :: Text -> PureJSON -> Spec

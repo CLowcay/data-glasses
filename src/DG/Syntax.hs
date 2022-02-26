@@ -14,6 +14,7 @@ module DG.Syntax
 where
 
 import Data.Hashable (Hashable)
+import Data.List.NonEmpty (NonEmpty)
 import Data.Text (Text)
 
 newtype Identifier = Identifier {unIdentifier :: Text}
@@ -28,7 +29,7 @@ data Expr
   | NullLit
   | Array [Expr]
   | Object [ObjectElement]
-  | Selection Expr Selector Operation
+  | Selection Expr (NonEmpty Selector) Operation
   | Unop Unop Expr
   | Binop Binop Expr Expr
   | Apply Expr [Expr]
@@ -49,7 +50,6 @@ data Selector
   | Map Expr
   | Where Expr
   | Collect Expr
-  | Compose Selector Selector
   deriving (Eq, Show)
 
 data Slice

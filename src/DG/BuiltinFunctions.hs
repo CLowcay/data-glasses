@@ -26,7 +26,7 @@ import Control.Exception (SomeException)
 import Control.Monad ((>=>))
 import DG.Json (JsonE (..), Object, compactPrint, deannotate)
 import DG.Runtime (Collector, Function (F), JsonMeta, JsonValue, Value (..), runtimeError)
-import qualified DG.Syntax as S
+import qualified DG.Syntax as DG
 import qualified Data.ByteString.Builder as BB
 import Data.Foldable (toList)
 import Data.Functor ((<&>))
@@ -48,45 +48,45 @@ oneArg = \case
   [v] -> Right v
   args -> runtimeError ("Expected 1 argument, found " ++ show (length args))
 
-isNull :: (S.Identifier, Function)
-isNull = (S.Identifier "isNull", F 1 $ oneArg >=> asJSON >=> pure . JSON . Bool . (== Null))
+isNull :: (DG.Identifier, Function)
+isNull = (DG.Identifier "isNull", F 1 $ oneArg >=> asJSON >=> pure . JSON . Bool . (== Null))
 
-isBool :: (S.Identifier, Function)
-isBool = (S.Identifier "isBool", F 1 $ oneArg >=> asJSON >=> pure . JSON . Bool . (\case Bool _ -> True; _ -> False))
+isBool :: (DG.Identifier, Function)
+isBool = (DG.Identifier "isBool", F 1 $ oneArg >=> asJSON >=> pure . JSON . Bool . (\case Bool _ -> True; _ -> False))
 
-isString :: (S.Identifier, Function)
-isString = (S.Identifier "isString", F 1 $ oneArg >=> asJSON >=> pure . JSON . Bool . (\case String _ -> True; _ -> False))
+isString :: (DG.Identifier, Function)
+isString = (DG.Identifier "isString", F 1 $ oneArg >=> asJSON >=> pure . JSON . Bool . (\case String _ -> True; _ -> False))
 
-isNumber :: (S.Identifier, Function)
-isNumber = (S.Identifier "isNumber", F 1 $ oneArg >=> asJSON >=> pure . JSON . Bool . (\case Number _ -> True; _ -> False))
+isNumber :: (DG.Identifier, Function)
+isNumber = (DG.Identifier "isNumber", F 1 $ oneArg >=> asJSON >=> pure . JSON . Bool . (\case Number _ -> True; _ -> False))
 
-isObject :: (S.Identifier, Function)
-isObject = (S.Identifier "isObject", F 1 $ oneArg >=> asJSON >=> pure . JSON . Bool . (\case Object _ -> True; _ -> False))
+isObject :: (DG.Identifier, Function)
+isObject = (DG.Identifier "isObject", F 1 $ oneArg >=> asJSON >=> pure . JSON . Bool . (\case Object _ -> True; _ -> False))
 
-isArray :: (S.Identifier, Function)
-isArray = (S.Identifier "isArray", F 1 $ oneArg >=> asJSON >=> pure . JSON . Bool . (\case Array _ -> True; _ -> False))
+isArray :: (DG.Identifier, Function)
+isArray = (DG.Identifier "isArray", F 1 $ oneArg >=> asJSON >=> pure . JSON . Bool . (\case Array _ -> True; _ -> False))
 
-stringify :: (S.Identifier, Function)
+stringify :: (DG.Identifier, Function)
 stringify =
-  ( S.Identifier "stringify",
+  ( DG.Identifier "stringify",
     F 1 $ oneArg >=> asJSON >=> pure . JSON . \case String s -> String s; v -> String (encodeJson v)
   )
   where
     encodeJson v = maybe "" (encodeToText . compactPrint) (deannotate v)
     encodeToText = LT.toStrict . LT.decodeUtf8With T.lenientDecode . BB.toLazyByteString
 
-sumCollector :: (S.Identifier, Collector Scientific)
-sumCollector = (S.Identifier "sum", (0, asNumber, Number, \a b -> pure (a + b)))
+sumCollector :: (DG.Identifier, Collector Scientific)
+sumCollector = (DG.Identifier "sum", (0, asNumber, Number, \a b -> pure (a + b)))
 
-productCollector :: (S.Identifier, Collector Scientific)
-productCollector = (S.Identifier "product", (0, asNumber, Number, \a b -> pure (a * b)))
+productCollector :: (DG.Identifier, Collector Scientific)
+productCollector = (DG.Identifier "product", (0, asNumber, Number, \a b -> pure (a * b)))
 
-countCollector :: (S.Identifier, Collector Scientific)
-countCollector = (S.Identifier "count", (0, const (pure 1), Number, \a b -> pure (a + b)))
+countCollector :: (DG.Identifier, Collector Scientific)
+countCollector = (DG.Identifier "count", (0, const (pure 1), Number, \a b -> pure (a + b)))
 
-meanCollector :: (S.Identifier, Collector (Scientific, Int))
+meanCollector :: (DG.Identifier, Collector (Scientific, Int))
 meanCollector =
-  ( S.Identifier "mean",
+  ( DG.Identifier "mean",
     ( (0, 0),
       \v -> asNumber v <&> (,1),
       \(t, n) -> Number (fromFloatDigits (toRealFloat t / (fromIntegral n :: Double))),
@@ -94,21 +94,21 @@ meanCollector =
     )
   )
 
-asArrayCollector :: (S.Identifier, Collector [JsonValue])
-asArrayCollector = (S.Identifier "asArray", ([], pure . pure, Array . V.fromList, \a b -> pure (a ++ b)))
+asArrayCollector :: (DG.Identifier, Collector [JsonValue])
+asArrayCollector = (DG.Identifier "asArray", ([], pure . pure, Array . V.fromList, \a b -> pure (a ++ b)))
 
-unionCollector :: (S.Identifier, Collector (Object JsonMeta))
-unionCollector = (S.Identifier "unionAll", (M.empty, asObject, Object, \a b -> pure (a `M.union` b)))
+unionCollector :: (DG.Identifier, Collector (Object JsonMeta))
+unionCollector = (DG.Identifier "unionAll", (M.empty, asObject, Object, \a b -> pure (a `M.union` b)))
 
-intersectionCollector :: (S.Identifier, Collector (Object JsonMeta))
-intersectionCollector = (S.Identifier "intersectionAll", (M.empty, asObject, Object, \a b -> pure (a `M.intersection` b)))
+intersectionCollector :: (DG.Identifier, Collector (Object JsonMeta))
+intersectionCollector = (DG.Identifier "intersectionAll", (M.empty, asObject, Object, \a b -> pure (a `M.intersection` b)))
 
-concatCollector :: (S.Identifier, Collector [JsonValue])
-concatCollector = (S.Identifier "concat", ([], fmap toList . asArray, Array . V.fromList, \a b -> pure (a <> b)))
+concatCollector :: (DG.Identifier, Collector [JsonValue])
+concatCollector = (DG.Identifier "concat", ([], fmap toList . asArray, Array . V.fromList, \a b -> pure (a <> b)))
 
-joinCollector :: (S.Identifier, Function)
+joinCollector :: (DG.Identifier, Function)
 joinCollector =
-  ( S.Identifier "join",
+  ( DG.Identifier "join",
     F 1 $
       oneArg >=> asJSON >=> asString >=> \seperator ->
         Right
