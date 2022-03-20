@@ -21,7 +21,7 @@ import Data.Scientific (Scientific, toBoundedInteger)
 import Data.Text (Text)
 import Data.Vector ((!), (//))
 import qualified Data.Vector as V
-import Streamly (SerialT)
+import Streamly.Prelude (SerialT)
 import qualified Streamly.Prelude as S
 
 type Context = Map DG.Identifier Value
@@ -75,7 +75,7 @@ get1 ctx s vs = case s of
   DG.Collect cexpr -> do
     collector <- lift (asSingle (evaluate ctx cexpr))
     withCollector collector $ \(unit, inj, proj, op) ->
-      lift ((Nothing,) . proj <$> S.foldlM' op unit (mapStream inj (snd <$> vs)))
+      lift ((Nothing,) . proj <$> S.foldlM' op (pure unit) (mapStream inj (snd <$> vs)))
   where
     nameWithKey name o = (Just (StringKey name),) <$> (o !? name)
     getSlice = \case
@@ -114,7 +114,7 @@ tmapM1 ::
   (Element -> Either SomeException JsonValue) ->
   Element ->
   Either SomeException JsonValue
-tmapM1 ctx s f element@(key, value) = case s of
+tmapM1 ctx s f element@(_, value) = case s of
   DG.Field (DG.Identifier name) ->
     case value of Object o -> Object <$> updateObject o name; _ -> pure value
   DG.Slice slices -> foldM updateSlice value slices
@@ -134,7 +134,7 @@ tmapM1 ctx s f element@(key, value) = case s of
               Array a -> do
                 is <- S.toList (S.filter (\i -> i >= 0 && i < V.length a) (asInt =<< ixs))
                 Array . (a //) <$> traverse (\i -> (i,) <$> f (Just (IndexKey i), a ! i)) is
-              Object o -> Object <$> S.foldlM' updateObject o (asString =<< ixs)
+              Object o -> Object <$> S.foldlM' updateObject (pure o) (asString =<< ixs)
               _ -> pure v
       DG.Range from to _ ->
         case v of
@@ -227,7 +227,7 @@ evaluateField ctx = \case
       (k,) <$> lift (asJSON =<< asSingle (evaluate (M.insert key (JSON (String k)) ctx) e))
 
 evaluateFilter :: Context -> DG.Expr -> (Maybe Key, JsonValue) -> Either SomeException Bool
-evaluateFilter ctx expr v = evaluateFilterFunction ctx expr >>= ($v)
+evaluateFilter ctx expr v = evaluateFilterFunction ctx expr >>= ($ v)
 
 keyToValue :: Key -> Value
 keyToValue = \case StringKey k -> JSON (String k); IndexKey i -> JSON (Number (fromIntegral i))
